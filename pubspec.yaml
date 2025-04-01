@@ -38,8 +38,8 @@ flutter:
   plugin:
     platforms:
       web:
-        pluginClass: VolcEngineRtcWebWeb
-        fileName: volc_engine_rtc_web_web.dart
+        pluginClass: VolcEngineRtcWeb
+        fileName: volc_engine_rtc_web.dart
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

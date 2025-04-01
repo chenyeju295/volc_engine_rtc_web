@@ -21,7 +21,7 @@
   <meta name="description" content="Demonstrates how to use the volc_engine_rtc_web plugin.">
 
   <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="volc_engine_rtc_web_example">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -31,8 +31,206 @@
 
   <title>volc_engine_rtc_web_example</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // The value below is injected by flutter build, do not touch.
+    const serviceWorkerVersion = null;
+  </script>
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
+  
+  <!-- VolcEngine RTC SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@volcengine/rtc@4.58.9/dist/index.min.js"></script>
+  
+  <!-- VolcEngine RTC AIAns Extension -->
+  <script src="https://cdn.jsdelivr.net/npm/@volcengine/rtc/extension-ainr@latest/dist/index.min.js"></script>
+  
+  <!-- OpenAPI Client Script -->
+  <script>
+    // Define the openAPIs object for voice chat functionality
+    window.openAPIs = {
+      StartVoiceChat: async function(options) {
+        console.log('StartVoiceChat called with options:', options);
+        // In a real implementation, this would make an API call to the server
+        // For demo purposes, we'll return a mock session ID
+        return Promise.resolve('session-' + Date.now());
+      },
+      
+      UpdateVoiceChat: async function(options) {
+        console.log('UpdateVoiceChat called with options:', options);
+        // In a real implementation, this would make an API call to the server
+        // For demo purposes, we'll return a success response
+        return Promise.resolve('updated-' + Date.now());
+      },
+      
+      StopVoiceChat: async function(options) {
+        console.log('StopVoiceChat called with options:', options);
+        // In a real implementation, this would make an API call to the server
+        // For demo purposes, we'll just return a success response
+        return Promise.resolve('stopped-' + Date.now());
+      }
+    };
+    
+    // Create a mock VERTC object for testing
+    window.VERTC = {
+      createEngine: function(appId) {
+        console.log('Creating mock RTC engine with appId:', appId);
+        
+        // 存储事件回调
+        const eventCallbacks = {};
+        
+        // 触发模拟事件的工具函数
+        const triggerEvent = function(eventName, eventData) {
+          console.log('Triggering event:', eventName, 'with data:', eventData);
+          const callback = eventCallbacks[eventName];
+          if (callback) {
+            callback(eventData);
+          }
+        };
+        
+        // 每10秒模拟一个远程用户加入
+        setInterval(function() {
+          const userId = 'remote-user-' + Math.floor(Math.random() * 1000);
+          triggerEvent('onUserJoined', { userId: userId, userName: 'AI User' });
+        }, 10000);
+        
+        return {
+          // Basic methods
+          getAppId: function() { return appId; },
+          getRoomId: function() { return 'mock-room-id'; },
+          
+          // Event handling
+          on: function(eventName, callback) {
+            console.log('Registered event handler for:', eventName);
+            eventCallbacks[eventName] = callback;
+            return true;
+          },
+          
+          // 手动触发事件的方法 (对外暴露，方便测试)
+          triggerEvent: triggerEvent,
+          
+          // Room management
+          enableAudioPropertiesReport: function(options) {
+            console.log('Enabled audio properties report with options:', options);
+            
+            // 每2秒模拟一次音频属性报告
+            setInterval(function() {
+              triggerEvent('onLocalAudioPropertiesReport', [{
+                captureVolume: Math.floor(Math.random() * 100)
+              }]);
+            }, 2000);
+            
+            return true;
+          },
+          
+          joinRoom: function(token, roomId, config, options) {
+            console.log('Joining room:', roomId, 'with token:', token);
+            console.log('Config:', config);
+            console.log('Options:', options);
+            
+            // 模拟用户加入
+            setTimeout(function() {
+              triggerEvent('onUserJoined', { 
+                userId: 'ai-assistant',
+                userName: 'AI Assistant' 
+              });
+              
+              // 模拟用户发布流
+              setTimeout(function() {
+                triggerEvent('onUserPublishStream', { 
+                  userId: 'ai-assistant',
+                  mediaType: 1 // 音频流
+                });
+              }, 1000);
+            }, 1000);
+            
+            return Promise.resolve();
+          },
+          
+          leaveRoom: function() {
+            console.log('Leaving room');
+            return Promise.resolve();
+          },
+          
+          // Audio control
+          startAudioCapture: function() {
+            console.log('Starting audio capture');
+            triggerEvent('onUserStartAudioCapture', { userId: 'local-user' });
+            return Promise.resolve();
+          },
+          
+          stopAudioCapture: function() {
+            console.log('Stopping audio capture');
+            triggerEvent('onUserStopAudioCapture', { userId: 'local-user' });
+            return Promise.resolve();
+          },
+          
+          // Stream control
+          publishStream: function(mediaType) {
+            console.log('Publishing stream with mediaType:', mediaType);
+            return Promise.resolve();
+          },
+          
+          unpublishStream: function(mediaType) {
+            console.log('Unpublishing stream with mediaType:', mediaType);
+            return Promise.resolve();
+          },
+          
+          // Extension support
+          registerExtension: function(extension) {
+            console.log('Registering extension');
+            return Promise.resolve();
+          }
+        };
+      },
+      
+      events: {
+        onError: 'onError',
+        onUserJoined: 'onUserJoined',
+        onUserLeave: 'onUserLeave',
+        onUserPublishStream: 'onUserPublishStream',
+        onUserUnpublishStream: 'onUserUnpublishStream',
+        onRemoteStreamStats: 'onRemoteStreamStats',
+        onLocalStreamStats: 'onLocalStreamStats',
+        onLocalAudioPropertiesReport: 'onLocalAudioPropertiesReport',
+        onRemoteAudioPropertiesReport: 'onRemoteAudioPropertiesReport',
+        onAudioDeviceStateChanged: 'onAudioDeviceStateChanged',
+        onUserMessageReceived: 'onUserMessageReceived',
+        onAutoplayFailed: 'onAutoplayFailed',
+        onPlayerEvent: 'onPlayerEvent',
+        onUserStartAudioCapture: 'onUserStartAudioCapture',
+        onUserStopAudioCapture: 'onUserStopAudioCapture',
+        onRoomBinaryMessageReceived: 'onRoomBinaryMessageReceived',
+        onNetworkQuality: 'onNetworkQuality'
+      }
+    };
+    
+    // Create a mock RTCAIAnsExtension for testing
+    window.RTCAIAnsExtension = function() {
+      return {
+        enable: function() {
+          console.log('Enabling AIAns extension');
+          return true;
+        }
+      };
+    };
+  </script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('load', function(ev) {
+      // Download main.dart.js
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
+        },
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine().then(function(appRunner) {
+            appRunner.runApp();
+          });
+        }
+      });
+    });
+  </script>
 </body>
 </html>
