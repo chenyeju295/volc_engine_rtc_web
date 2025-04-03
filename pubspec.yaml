@@ -15,6 +15,7 @@ dependencies:
   web: ^0.5.1
   plugin_platform_interface: ^2.0.2
 
+  js: ^0.6.5
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -41,6 +42,14 @@ flutter:
         pluginClass: VolcEngineRtcWebWeb
         fileName: volc_engine_rtc_web_web.dart
 
+flutter:
+  plugin:
+    platforms:
+      web:
+        pluginClass: RtcAigcPlugin
+        fileName: rtc_aigc_plugin_web.dart
+  assets:
+      - web/rtc_interop.js
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
