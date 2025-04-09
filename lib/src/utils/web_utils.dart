@@ -17,17 +17,17 @@ class WebUtils {
   static final List<String> _sdks = [
     'https://lf-unpkg.volccdn.com/obj/vcloudfe/sdk/@volcengine/rtc/4.66.1/1741254642340/volengine_Web_4.66.1.js',
   ];
- 
+
 
   /// Wait for SDK to load
   static Future<void> waitForSdkLoaded() async {
     final completer = Completer<void>();
-
+    
     try {
       // Check if RTC objects already exist
       if (!js.context.hasProperty('VERTC')) {
         debugPrint('VERTC SDK not loaded, loading scripts...');
-
+        
         // Add event listener for script load
         await _loadVERTCScripts(completer);
       } else {
@@ -38,10 +38,10 @@ class WebUtils {
       debugPrint('Error while loading SDK: $e');
       completer.completeError(e);
     }
-
+    
     return completer.future;
   }
-
+  
   /// Load VERTC scripts
   static Future<void> _loadVERTCScripts(Completer<void> completer) async {
     try {
@@ -59,10 +59,10 @@ class WebUtils {
             'Volcano Engine RTC SDK not loaded properly - VERTC object not found');
       }
       debugPrint('Volcano Engine RTC SDK loaded successfully');
- 
+
       // Wait a moment for the interop scripts to initialize
       await Future.delayed(const Duration(milliseconds: 200));
-
+      
       completer.complete();
     } catch (e) {
       debugPrint('Failed to load VERTC scripts: $e');
@@ -84,7 +84,7 @@ class WebUtils {
         debugPrint('Warning: JavaScript object does not have method: $method');
         return null;
       }
-
+      
       // 调用方法
       if (args != null) {
         // 确保所有函数参数都用allowInterop包装
@@ -118,20 +118,20 @@ class WebUtils {
       return null;
     }
   }
-
+  
   /// Call a JavaScript method that returns a Promise
   static dynamic callMethod(dynamic jsObject, String method,
       [List<dynamic>? args]) {
     if (jsObject == null) {
       throw Exception('JavaScript object is null, cannot call $method');
     }
-
+    
     try {
       // 检查是否存在该方法（仅对js.JsObject类型有效）
       if (jsObject is js.JsObject && !jsObject.hasProperty(method)) {
         throw Exception('JavaScript object does not have method: $method');
       }
-
+      
       if (args != null) {
         return js_util.callMethod(jsObject, method, args);
       } else {
@@ -152,13 +152,13 @@ class WebUtils {
       throw Exception('Failed to call $method: $e');
     }
   }
-
+  
   /// Convert a JavaScript Promise to a Dart Future
   static Future<T> promiseToFuture<T>(dynamic jsPromise) {
     if (jsPromise == null) {
       throw Exception('Promise is null');
     }
-
+    
     try {
       return js_util.promiseToFuture<T>(jsPromise);
     } catch (e) {
@@ -187,7 +187,7 @@ class WebUtils {
 
     // Check if script tags already exist
     final scripts = html.document.querySelectorAll('script');
-    bool sdksLoaded = true; 
+    bool sdksLoaded = true;
 
     // Check if SDKs are loaded
     for (final sdk in _sdks) {
@@ -204,7 +204,7 @@ class WebUtils {
         break;
       }
     }
- 
+
     return sdksLoaded  ;
   }
 
@@ -241,21 +241,21 @@ class WebUtils {
 
     debugPrint('Loading script: $url');
     final completer = Completer<void>();
-
+    
     final scriptElement = html.ScriptElement();
     scriptElement.type = 'text/javascript';
     scriptElement.src = url;
-
+    
     scriptElement.onLoad.listen((_) {
       debugPrint('Script loaded: $url');
       completer.complete();
     });
-
+    
     scriptElement.onError.listen((event) {
       debugPrint('Failed to load script: $url');
       completer.completeError('Failed to load script: $url');
     });
-
+    
     html.document.head!.append(scriptElement);
     return completer.future;
   }

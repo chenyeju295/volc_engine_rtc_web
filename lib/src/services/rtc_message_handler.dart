@@ -53,20 +53,62 @@ class RtcMessageHandler {
           ? (userId['userId'] ?? 'unknown')
           : (userId is String ? userId : userId.toString());
 
-      // 只处理来自AI的消息
-      if (userIdStr != 'BotName001' &&
+      // 检查是否允许处理所有消息，默认只处理AI消息
+      final bool processAllMessages = config.processAllMessages ?? false;
+
+      // 消息过滤 - 如果不是处理所有消息，则只处理来自AI的消息
+      if (!processAllMessages &&
+          userIdStr != 'BotName001' &&
           !userIdStr.contains('bot') &&
           userIdStr != 'RobotMan_') {
         debugPrint('【消息处理】跳过非AI消息: $userIdStr');
         return;
       }
 
-      debugPrint(
-          '【消息处理】接收到消息 - 来源: $userIdStr, 长度: ${message is ByteBuffer ? message.lengthInBytes : 'unknown'}');
+      // 记录消息信息，但对于大二进制数据只记录长度
+      if (kDebugMode) {
+        String lengthInfo = '';
+        if (message is ByteBuffer) {
+          lengthInfo = '${message.lengthInBytes} bytes';
+        } else if (message is js.JsObject &&
+            js_util.hasProperty(message, 'byteLength')) {
+          lengthInfo = '${js_util.getProperty(message, 'byteLength')} bytes';
+        } else {
+          lengthInfo = 'unknown size';
+        }
+        debugPrint('【消息处理】接收到消息 - 来源: $userIdStr, 长度: $lengthInfo');
+      }
 
-      // 解析TLV消息
+      // 尝试使用TLV解析
       final parsedData = RtcAigcMessageUtils.parseTlvMessage(message);
       if (parsedData == null) {
+        debugPrint('【消息处理】尝试直接解析消息体...');
+        // 尝试直接解析二进制消息
+        try {
+          final String directText = WebUtils.binaryToString(message);
+          if (directText.isNotEmpty) {
+            try {
+              // 尝试解析为JSON
+              final jsonData = jsonDecode(directText);
+              _handleDirectJsonMessage(userIdStr, jsonData);
+              return;
+            } catch (jsonError) {
+              // 如果不是JSON，直接作为文本消息处理
+              final subtitleMap = <String, dynamic>{
+                'text': directText,
+                'isFinal': true,
+                'userId': userIdStr,
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              };
+              _subtitleController.add(subtitleMap);
+              addMessageToHistory(subtitleMap);
+              return;
+            }
+          }
+        } catch (directError) {
+          debugPrint('【消息处理】直接解析消息体失败: $directError');
+        }
+
         debugPrint('【消息处理】无法解析消息内容');
         return;
       }
@@ -90,6 +132,10 @@ class RtcMessageHandler {
           debugPrint('【消息处理】解析到控制消息');
           _handleControlMessage(data);
           break;
+        case 'conv': // 在js端对应MESSAGE_TYPE.BRIEF
+          debugPrint('【消息处理】解析到会话状态消息');
+          _handleStateMessage(data);
+          break;
         default:
           debugPrint('【消息处理】未知的消息类型: $messageType');
           break;
@@ -97,6 +143,61 @@ class RtcMessageHandler {
     } catch (e, stackTrace) {
       debugPrint('【消息处理】处理二进制消息失败: $e');
       debugPrint('【消息处理】错误堆栈: $stackTrace');
+    }
+  }
+
+  /// 处理直接的JSON消息（非TLV格式）
+  void _handleDirectJsonMessage(String userId, dynamic jsonData) {
+    try {
+      if (jsonData == null) {
+        debugPrint('【消息处理】JSON数据为空');
+        return;
+      }
+
+      // 尝试检查消息类型
+      if (jsonData is Map) {
+        // 检查是否包含Stage字段，表示这是一个状态消息
+        if (jsonData.containsKey('Stage')) {
+          _handleStateMessage(jsonData);
+          return;
+        }
+
+        // 检查是否包含tool_calls字段，表示这是一个函数调用消息
+        if (jsonData.containsKey('tool_calls')) {
+          _handleFunctionCallMessage(jsonData);
+          return;
+        }
+
+        // 检查是否是字幕类型消息
+        if (jsonData.containsKey('data') && jsonData['data'] is List) {
+          final type = jsonData['type']?.toString() ?? '';
+          if (type == 'subv' || type == 'subtitle') {
+            handleSubtitleMessage(jsonData);
+            return;
+          }
+        }
+
+        // 如果包含text字段，可能是直接的字幕消息
+        if (jsonData.containsKey('text')) {
+          final subtitleMap = <String, dynamic>{
+            'text': jsonData['text']?.toString() ?? '',
+            'isFinal':
+                jsonData['isFinal'] == true || jsonData['definite'] == true,
+            'userId': userId,
+            'timestamp':
+                jsonData['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+          };
+          _subtitleController.add(subtitleMap);
+          addMessageToHistory(subtitleMap);
+          return;
+        }
+      }
+
+      // 如果无法识别特定类型，记录数据供调试
+      debugPrint(
+          '【消息处理】无法识别的直接JSON消息: ${jsonEncode(jsonData).substring(0, min(200, jsonEncode(jsonData).length))}...');
+    } catch (e) {
+      debugPrint('【消息处理】处理直接JSON消息失败: $e');
     }
   }
 
@@ -280,7 +381,7 @@ class RtcMessageHandler {
   }
 
   /// 处理状态消息
-  void _handleStateMessage(Map<String, dynamic> parsedData) {
+  void _handleStateMessage(Map<dynamic, dynamic> parsedData) {
     try {
       final stage = parsedData['Stage'];
       if (stage == null) {
@@ -331,7 +432,7 @@ class RtcMessageHandler {
   }
 
   /// 处理函数调用消息
-  void _handleFunctionCallMessage(Map<String, dynamic> data) {
+  void _handleFunctionCallMessage(Map<dynamic, dynamic> data) {
     if (data.isEmpty) {
       debugPrint('【函数调用】收到空的函数调用消息');
       return;

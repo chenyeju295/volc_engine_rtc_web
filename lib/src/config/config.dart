@@ -307,6 +307,9 @@ class RtcConfig {
 
   /// Welcome message
   final String? welcomeMessage;
+  
+  /// Whether to process all messages, including non-AI messages
+  final bool? processAllMessages;
 
   /// RTC configuration for real-time communications
   const RtcConfig({
@@ -321,6 +324,7 @@ class RtcConfig {
     this.serverUrl,
     this.businessId,
     this.welcomeMessage = "你好，我是AI助手，有什么我可以帮您的吗？",
+    this.processAllMessages = false,
   });
 
   /// Convert to map
@@ -337,6 +341,7 @@ class RtcConfig {
       if (serverUrl != null) 'serverUrl': serverUrl,
       if (businessId != null) 'businessId': businessId,
       if (welcomeMessage != null) 'welcomeMessage': welcomeMessage,
+      if (processAllMessages != null) 'processAllMessages': processAllMessages,
     };
   }
 
@@ -354,6 +359,7 @@ class RtcConfig {
       llmConfig: LlmConfig.fromMap(map['llmConfig']),
       businessId: map['businessId'],
       welcomeMessage: map['welcomeMessage'],
+      processAllMessages: map['processAllMessages'],
     );
   }
 
@@ -370,6 +376,7 @@ class RtcConfig {
     LlmConfig? llmConfig,
     String? businessId,
     String? welcomeMessage,
+    bool? processAllMessages,
   }) {
     return RtcConfig(
       appId: appId ?? this.appId,
@@ -383,6 +390,7 @@ class RtcConfig {
       llmConfig: llmConfig ?? this.llmConfig,
       businessId: businessId ?? this.businessId,
       welcomeMessage: welcomeMessage ?? this.welcomeMessage,
+      processAllMessages: processAllMessages ?? this.processAllMessages,
     );
   }
 }
