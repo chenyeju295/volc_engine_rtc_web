@@ -297,7 +297,7 @@ class RtcConfig {
   final String taskId;
 
   /// Server URL for HTTP API
-  final String? serverUrl;
+  final String serverUrl;
 
   final AsrConfig asrConfig;
 
@@ -321,7 +321,7 @@ class RtcConfig {
     required this.ttsConfig,
     required this.llmConfig,
     required this.taskId,
-    this.serverUrl,
+    required this.serverUrl,
     this.businessId,
     this.welcomeMessage = "你好，我是AI助手，有什么我可以帮您的吗？",
     this.processAllMessages = false,

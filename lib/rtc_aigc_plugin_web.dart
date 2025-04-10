@@ -12,9 +12,6 @@ import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:rtc_aigc_plugin/src/config/config.dart';
 import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/service_manager.dart';
-import 'package:rtc_aigc_plugin/src/services/service_interface.dart';
-import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
-import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_service.dart';
 
 /// RTC AIGC Plugin for Web - Web平台专用实现
@@ -31,17 +28,23 @@ class RtcAigcPluginWeb {
   // 新增: 事件控制器
   final StreamController<Map<String, dynamic>> _userJoinedController = 
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userLeaveController = 
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _userPublishStreamController = 
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userUnpublishStreamController = 
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _userStartAudioCaptureController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userStopAudioCaptureController = 
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _playerEventController = 
       StreamController<Map<String, dynamic>>.broadcast();
 
   /// 用于监听字幕变化的流
-  Stream<String> get subtitleStream =>
+  Stream<Map<String, dynamic>> get subtitleStream =>
       _serviceManager?.rtcService.subtitleStream ??
-      const Stream<String>.empty();
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用于监听AI状态变化的流
   Stream<RtcState> get stateStream =>
@@ -105,11 +108,20 @@ class RtcAigcPluginWeb {
   /// 新增: 用户加入事件流
   Stream<Map<String, dynamic>> get userJoinedStream => _userJoinedController.stream;
 
+  /// 新增: 用户离开事件流
+  Stream<Map<String, dynamic>> get userLeaveStream => _userLeaveController.stream;
+
   /// 新增: 用户发布流事件流
   Stream<Map<String, dynamic>> get userPublishStreamStream => _userPublishStreamController.stream;
 
+  /// 新增: 用户取消发布流事件流
+  Stream<Map<String, dynamic>> get userUnpublishStreamStream => _userUnpublishStreamController.stream;
+
   /// 新增: 用户开始音频采集事件流
   Stream<Map<String, dynamic>> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
+
+  /// 新增: 用户停止音频采集事件流
+  Stream<Map<String, dynamic>> get userStopAudioCaptureStream => _userStopAudioCaptureController.stream;
 
   /// 新增: 播放器事件流
   Stream<Map<String, dynamic>> get playerEventStream => _playerEventController.stream;
@@ -214,9 +226,6 @@ class RtcAigcPluginWeb {
       case 'dispose':
         return await _handleDispose();
 
-      case 'testAISubtitle':
-      case 'simulateSubtitle': // 兼容老版本
-        return await _handleTestAISubtitle(args);
 
       case 'leaveRoom':
         return await _handleLeaveRoom();
@@ -628,42 +637,16 @@ class RtcAigcPluginWeb {
       
       // 关闭事件流
       _userJoinedController.close();
+      _userLeaveController.close();
       _userPublishStreamController.close();
+      _userUnpublishStreamController.close();
       _userStartAudioCaptureController.close();
+      _userStopAudioCaptureController.close();
       _playerEventController.close();
       
       return {'success': true};
     } catch (e) {
       debugPrint('RTC AIGC Plugin dispose error: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  /// 测试AI字幕 - 开发模式下用于测试
-  Future<Map<String, dynamic>> _handleTestAISubtitle(
-      Map<dynamic, dynamic>? args) async {
-    try {
-      if (_serviceManager == null || args == null) {
-        throw PlatformException(
-          code: 'INVALID_STATE',
-          message: 'RTC service not initialized or missing arguments',
-        );
-      }
-
-      final text = args['text'] as String?;
-      if (text == null || text.isEmpty) {
-        throw PlatformException(
-          code: 'INVALID_ARGUMENT',
-          message: 'Subtitle text cannot be null or empty',
-        );
-      }
-
-      final isFinal = args['isFinal'] as bool? ?? true;
-      final result =
-          await _serviceManager!.testAISubtitle(text, isFinal: isFinal);
-      return {'success': result};
-    } catch (e) {
-      debugPrint('RTC AIGC Plugin testAISubtitle error: $e');
       return {'success': false, 'error': e.toString()};
     }
   }

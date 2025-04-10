@@ -2,11 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
 import 'package:rtc_aigc_plugin/src/config/config.dart';
-import 'conversation_demo.dart'; // 导入会话演示页面
 import 'widgets/subtitle_view.dart' as local_widgets;
 
 void main() {
-  // 确保Flutter binding初始化
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -16,8 +14,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: RtcAigcDemo(),
+    return MaterialApp(
+      title: 'RTC AIGC Demo',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: const RtcAigcDemo(),
     );
   }
 }
@@ -30,70 +33,91 @@ class RtcAigcDemo extends StatefulWidget {
 }
 
 class _RtcAigcDemoState extends State<RtcAigcDemo> {
-  String _status = 'Not initialized';
-  final List<String> _messages = [];
+  String _status = '未初始化';
   bool _isInitialized = false;
+  bool _isJoined = false;
   bool _isConversationActive = false;
   bool _isSpeaking = false;
-
-  // 字幕相关状态
   String _currentSubtitle = '';
   bool _isSubtitleFinal = false;
-
-  // 订阅处理
-  StreamSubscription? _subtitleSubscription;
-  StreamSubscription? _audioStatusSubscription;
-
-  // Audio device states
+  List<Map<String, dynamic>> _messages = [];
   List<Map<String, String>> _audioInputDevices = [];
   List<Map<String, String>> _audioOutputDevices = [];
   String? _selectedAudioInputId;
   String? _selectedAudioOutputId;
 
+  // 新增: AI用户状态
+  String? _aiUserId;
+  bool _isAiAudioCaptureStarted = false;
+  bool _isAiPublished = false;
+
+  // 控制器
   final TextEditingController _messageController = TextEditingController();
-  final TextEditingController _subtitleController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  // 订阅
+  StreamSubscription? _subtitleSubscription;
+  StreamSubscription? _audioStatusSubscription;
+  StreamSubscription? _messageSubscription;
+  StreamSubscription? _stateSubscription;
+  
+  // 新增: RTC事件订阅
+  StreamSubscription? _userJoinedSubscription;
+  StreamSubscription? _userLeaveSubscription;
+  StreamSubscription? _userPublishStreamSubscription;
+  StreamSubscription? _userUnpublishStreamSubscription;
+  StreamSubscription? _userStartAudioCaptureSubscription;
+  StreamSubscription? _userStopAudioCaptureSubscription;
 
   @override
   void initState() {
     super.initState();
-    // 使用微任务确保widget完全挂载后再初始化
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initialize();
-    });
+    _initialize();
   }
 
   @override
   void dispose() {
     _subtitleSubscription?.cancel();
     _audioStatusSubscription?.cancel();
-    RtcAigcPlugin.dispose();
+    _messageSubscription?.cancel();
+    _stateSubscription?.cancel();
+    
+    // 新增: 取消RTC事件订阅
+    _userJoinedSubscription?.cancel();
+    _userLeaveSubscription?.cancel();
+    _userPublishStreamSubscription?.cancel();
+    _userUnpublishStreamSubscription?.cancel();
+    _userStartAudioCaptureSubscription?.cancel();
+    _userStopAudioCaptureSubscription?.cancel();
+    
     _messageController.dispose();
-    _subtitleController.dispose();
+    _scrollController.dispose();
+    RtcAigcPlugin.dispose();
     super.dispose();
   }
 
   Future<void> _initialize() async {
     setState(() {
-      _status = 'Initializing...';
+      _status = '正在初始化...';
     });
 
     try {
-      // 创建ASR配置
+      // 创建 ASR 配置
       final asrConfig = AsrConfig(
-        appId: '4799544484', // 需要替换为您的ASR AppID
+        appId: '4799544484', // 替换为您的 ASR AppID
         cluster: 'volcengine_streaming_common',
       );
 
-      // 创建TTS配置
+      // 创建 TTS 配置
       final ttsConfig = TtsConfig(
-        appId: '4799544484', // 需要替换为您的TTS AppID
+        appId: '4799544484', // 替换为您的 TTS AppID
         voiceType: 'volcano_tts',
       );
 
-      // 创建LLM配置
+      // 创建 LLM 配置
       final llmConfig = LlmConfig(
         modelName: 'ArkV3',
-        endPointId: 'ep-20250401160533-rr59m', // 需要替换为您的EndPointID
+        endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
         maxTokens: 1024,
         temperature: 0.1,
         topP: 0.3,
@@ -106,12 +130,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
 
       final success = await RtcAigcPlugin.initialize(
-        appId: '67eb953062b4b601a6df1348', // 替换为您的APP ID
-        roomId: 'room1', // 房间ID
-        userId: 'user1', // 用户ID
+        appId: '67eb953062b4b601a6df1348', // 替换为您的 APP ID
+        roomId: 'room1',
+        userId: 'user1',
         taskId: 'user1',
-        token:
-            '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的Token
+        token: '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
         serverUrl: "http://localhost:3001",
         asrConfig: asrConfig,
         ttsConfig: ttsConfig,
@@ -120,106 +143,174 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         onMessage: _handleMessage,
         onAudioStatusChange: _handleAudioStatusChange,
         onSubtitle: _handleSubtitle,
+        // 新增: 设置RTC事件回调
+        onUserJoined: _handleUserJoined,
+        onUserLeave: _handleUserLeave,
+        onUserPublishStream: _handleUserPublishStream,
+        onUserUnpublishStream: _handleUserUnpublishStream,
+        onUserStartAudioCapture: _handleUserStartAudioCapture,
+        onUserStopAudioCapture: _handleUserStopAudioCapture,
       );
 
       if (success) {
         setState(() {
-          _status = 'Initialized';
+          _status = '初始化成功';
           _isInitialized = true;
         });
+
+        // 请求麦克风权限
+        await _requestMicrophoneAccess();
+
+        // 设置订阅
+        _setupSubscriptions();
       } else {
         setState(() {
-          _status = 'Initialization failed';
+          _status = '初始化失败';
         });
       }
     } catch (e) {
       setState(() {
-        _status = 'Error: $e';
+        _status = '错误: $e';
       });
     }
   }
 
-  Future<void> _startConversation() async {
-    if (!_isInitialized) return;
-
+  Future<void> _requestMicrophoneAccess() async {
     setState(() {
-      _status = 'Starting conversation...';
+      _status = '正在请求麦克风权限...';
     });
 
     try {
-      final success = await RtcAigcPlugin.startConversation(
-        welcomeMessage: 'Hello, how can I help you today?',
-      );
+      final result = await RtcAigcPlugin.requestMicrophoneAccess();
+      final success = result is Map ? (result['success'] ?? false) : false;
 
-      if (success) {
-        setState(() {
-          _status = 'Conversation active';
-          _isConversationActive = true;
-        });
-      } else {
-        setState(() {
-          _status = 'Failed to start conversation';
-        });
+      setState(() {
+        if (success) {
+          _status = '麦克风权限获取成功';
+        } else {
+          _status = '麦克风权限获取失败，某些功能可能无法使用';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _status = '麦克风权限请求错误: $e';
+      });
+    }
+  }
+
+  void _setupSubscriptions() {
+    // 订阅字幕流
+    _subtitleSubscription = RtcAigcPlugin.subtitleStream.listen((subtitle) {
+      if (subtitle == null) return;
+      final Map<String, dynamic> subtitleMap = subtitle as Map<String, dynamic>;
+      setState(() {
+        _currentSubtitle = subtitleMap['text'] ?? '';
+        _isSubtitleFinal = subtitleMap['isFinal'] ?? false;
+      });
+    });
+
+    // 订阅音频状态流
+    _audioStatusSubscription = RtcAigcPlugin.audioStatusStream.listen((isActive) {
+      setState(() {
+        _isSpeaking = isActive;
+      });
+    });
+
+    // 订阅消息流
+    _messageSubscription = RtcAigcPlugin.messageHistoryStream.listen((message) {
+      if (message == null) return;
+      final Map<String, dynamic> messageMap = message as Map<String, dynamic>;
+      setState(() {
+        _messages.add(messageMap);
+      });
+      _scrollToBottom();
+    });
+
+    // 订阅状态流
+    _stateSubscription = RtcAigcPlugin.stateStream.listen((state) {
+      if (state == null) return;
+      setState(() {
+        _status = state.toString();
+      });
+    });
+    
+    // 新增: 订阅RTC事件流
+    _setupRtcEventSubscriptions();
+  }
+  
+  // 新增: 设置RTC事件订阅
+  void _setupRtcEventSubscriptions() {
+    // 用户加入事件
+    _userJoinedSubscription = RtcAigcPlugin.userJoinedStream.listen((data) {
+      _handleUserJoined(data);
+    });
+    
+    // 用户离开事件
+    _userLeaveSubscription = RtcAigcPlugin.userLeaveStream.listen((data) {
+      _handleUserLeave(data);
+    });
+    
+    // 用户发布流事件
+    _userPublishStreamSubscription = RtcAigcPlugin.userPublishStreamStream.listen((data) {
+      _handleUserPublishStream(data);
+    });
+    
+    // 用户取消发布流事件
+    _userUnpublishStreamSubscription = RtcAigcPlugin.userUnpublishStreamStream.listen((data) {
+      _handleUserUnpublishStream(data);
+    });
+    
+    // 用户开始音频采集事件
+    _userStartAudioCaptureSubscription = RtcAigcPlugin.userStartAudioCaptureStream.listen((data) {
+      _handleUserStartAudioCapture(data);
+    });
+    
+    // 用户停止音频采集事件
+    _userStopAudioCaptureSubscription = RtcAigcPlugin.userStopAudioCaptureStream.listen((data) {
+      _handleUserStopAudioCapture(data);
+    });
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
-    } catch (e) {
-      setState(() {
-        _status = 'Error: $e';
-      });
-    }
-  }
-
-  Future<void> _stopConversation() async {
-    if (!_isInitialized || !_isConversationActive) return;
-
-    setState(() {
-      _status = 'Stopping conversation...';
     });
-
-    try {
-      final success = await RtcAigcPlugin.stopConversation();
-
-      setState(() {
-        _status =
-            success ? 'Conversation stopped' : 'Failed to stop conversation';
-        _isConversationActive = false;
-        _currentSubtitle = '';
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error: $e';
-        _isConversationActive = false;
-      });
-    }
   }
 
-  Future<void> _muteAudio() async {
-    if (!_isInitialized || !_isConversationActive) return;
-
-    try {
-      await RtcAigcPlugin.muteAudio(true);
-      setState(() {
-        _status = 'Audio muted';
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error muting audio: $e';
-      });
-    }
+  void _handleStateChange(String state, String? message) {
+    setState(() {
+      _status = state;
+    });
   }
 
-  Future<void> _unmuteAudio() async {
-    if (!_isInitialized || !_isConversationActive) return;
+  void _handleMessage(String text, bool isUser) {
+    setState(() {
+      _messages.add({
+        'text': text,
+        'isUser': isUser,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+    });
+    _scrollToBottom();
+  }
 
-    try {
-      await RtcAigcPlugin.muteAudio(false);
-      setState(() {
-        _status = 'Audio unmuted';
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error unmuting audio: $e';
-      });
-    }
+  void _handleAudioStatusChange(bool isPlaying) {
+    setState(() {
+      _isSpeaking = isPlaying;
+    });
+  }
+
+  void _handleSubtitle(Map<String, dynamic> subtitle) {
+    setState(() {
+      _currentSubtitle = subtitle['text'] ?? '';
+      _isSubtitleFinal = subtitle['isFinal'] ?? false;
+    });
   }
 
   Future<void> _joinRoom() async {
@@ -230,103 +321,101 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     });
 
     try {
-      final success = await RtcAigcPlugin.joinRoom(
-          // 可以传递参数来覆盖初始化时的设置
-          // roomId: 'custom_room_id',
-          // userId: 'custom_user_id',
-          // token: 'custom_token',
-          );
+      final success = await RtcAigcPlugin.joinRoom();
 
-      setState(() {
-        if (success) {
-          _status = '已成功加入房间';
-          // 添加一条系统消息
-          _messages.add('系统: 已成功加入房间');
-        } else {
+      if (success) {
+        setState(() {
+          _status = '已加入房间';
+          _isJoined = true;
+        });
+
+        // 获取音频设备列表
+        _audioInputDevices = await RtcAigcPlugin.getAudioInputDevices();
+        _audioOutputDevices = await RtcAigcPlugin.getAudioOutputDevices();
+      } else {
+        setState(() {
           _status = '加入房间失败';
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _status = '加入房间出错: $e';
-      });
-    }
-  }
-
-  void _handleStateChange(String state, String? message) {
-    setState(() {
-      _status = '$state ${message != null ? ': $message' : ''}';
-    });
-  }
-
-  void _handleMessage(String text, bool isUser) {
-    setState(() {
-      _messages.add('${isUser ? 'You' : 'AI'}: $text');
-    });
-  }
-
-  void _handleAudioStatusChange(bool isPlaying) {
-    setState(() {
-      _isSpeaking = isPlaying;
-    });
-  }
-
-  void _handleSubtitle(Map<String, dynamic> subtitle) {
-    final text = subtitle['text'] as String? ?? '';
-    final isFinal = subtitle['isFinal'] as bool? ?? false;
-
-    setState(() {
-      _currentSubtitle = text;
-      _isSubtitleFinal = isFinal;
-    });
-  }
-
-  Future<void> _refreshAudioDevices() async {
-    try {
-      // 获取音频输入设备列表
-      final inputDevices = await RtcAigcPlugin.getAudioInputDevices();
-
-      // 获取音频输出设备列表
-      final outputDevices = await RtcAigcPlugin.getAudioOutputDevices();
-
-      // 获取当前选中的设备
-      final currentInputId = await RtcAigcPlugin.getCurrentAudioInputDevice();
-      final currentOutputId = await RtcAigcPlugin.getCurrentAudioOutputDevice();
-
-      setState(() {
-        _audioInputDevices = inputDevices;
-        _audioOutputDevices = outputDevices;
-        _selectedAudioInputId = currentInputId;
-        _selectedAudioOutputId = currentOutputId;
-      });
-    } catch (e) {
-      print('Error refreshing audio devices: $e');
-    }
-  }
-
-  Future<void> _setAudioInputDevice(String deviceId) async {
-    try {
-      final success = await RtcAigcPlugin.setAudioInputDevice(deviceId);
-      if (success) {
-        setState(() {
-          _selectedAudioInputId = deviceId;
         });
       }
     } catch (e) {
-      print('Error setting audio input device: $e');
+      setState(() {
+        _status = '错误: $e';
+      });
     }
   }
 
-  Future<void> _setAudioOutputDevice(String deviceId) async {
+  Future<void> _startConversation() async {
+    if (!_isInitialized || !_isJoined) return;
+
+    setState(() {
+      _status = '正在开始对话...';
+      _addSystemMessage('正在启动AI智能体...');
+    });
+
     try {
-      final success = await RtcAigcPlugin.setAudioOutputDevice(deviceId);
+      final success = await RtcAigcPlugin.startConversation(
+        welcomeMessage: '你好，我是AI助手，有什么可以帮助你的？',
+      );
+
       if (success) {
         setState(() {
-          _selectedAudioOutputId = deviceId;
+          _status = '对话已开始';
+          _isConversationActive = true;
+          _addSystemMessage('AI智能体已启动，等待欢迎语...');
+        });
+      } else {
+        setState(() {
+          _status = '开始对话失败';
+          _addSystemMessage('AI智能体启动失败');
         });
       }
     } catch (e) {
-      print('Error setting audio output device: $e');
+      setState(() {
+        _status = '错误: $e';
+        _addSystemMessage('AI智能体启动出错: $e');
+      });
+    }
+  }
+
+  Future<void> _stopConversation() async {
+    if (!_isInitialized || !_isConversationActive) return;
+
+    setState(() {
+      _status = '正在停止对话...';
+      _addSystemMessage('正在关闭AI智能体...');
+    });
+
+    try {
+      final success = await RtcAigcPlugin.stopConversation();
+
+      setState(() {
+        _status = success ? '对话已停止' : '停止对话失败';
+        _isConversationActive = false;
+        _addSystemMessage(success ? 'AI智能体已关闭' : 'AI智能体关闭失败');
+      });
+    } catch (e) {
+      setState(() {
+        _status = '错误: $e';
+        _addSystemMessage('AI智能体关闭出错: $e');
+      });
+    }
+  }
+
+  Future<void> _interruptConversation() async {
+    if (!_isInitialized || !_isConversationActive) return;
+
+    setState(() {
+      _addSystemMessage('正在打断AI回答...');
+    });
+
+    try {
+      await RtcAigcPlugin.interruptConversation();
+      _addSystemMessage('已打断AI回答');
+    } catch (e) {
+      setState(() {
+        _status = '错误: $e';
+        _addSystemMessage('打断AI回答出错: $e');
+      });
     }
   }
 
@@ -337,262 +426,474 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     if (message.isEmpty) return;
 
     try {
+      _addSystemMessage('正在发送消息...');
       await RtcAigcPlugin.sendTextMessage(message);
       _messageController.clear();
+      _addSystemMessage('消息已发送，等待AI回复...');
     } catch (e) {
-      print('Error sending message: $e');
       setState(() {
-        _status = 'Error sending message: $e';
+        _status = '错误: $e';
+        _addSystemMessage('发送消息出错: $e');
       });
     }
   }
 
-  Widget _buildControlPanel() {
-    return Card(
-      margin: const EdgeInsets.all(8.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '控制面板',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _isInitialized ? _joinRoom : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isInitialized ? Colors.blue : Colors.grey,
-                  ),
-                  child: const Text('加入房间'),
-                ),
-                ElevatedButton(
-                  onPressed: _isInitialized && !_isConversationActive
-                      ? _startConversation
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isInitialized && !_isConversationActive
-                        ? Colors.green
-                        : Colors.grey,
-                  ),
-                  child: const Text('开始对话'),
-                ),
-                ElevatedButton(
-                  onPressed: _isInitialized && _isConversationActive
-                      ? _stopConversation
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isInitialized && _isConversationActive
-                        ? Colors.red
-                        : Colors.grey,
-                  ),
-                  child: const Text('结束对话'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _isInitialized && _isConversationActive
-                      ? _muteAudio
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isInitialized && _isConversationActive
-                        ? Colors.orange
-                        : Colors.grey,
-                  ),
-                  child: const Text('静音'),
-                ),
-                ElevatedButton(
-                  onPressed: _isInitialized && _isConversationActive
-                      ? _unmuteAudio
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isInitialized && _isConversationActive
-                        ? Colors.blue
-                        : Colors.grey,
-                  ),
-                  child: const Text('取消静音'),
-                ),
-                // 添加TTS测试按钮
-                ElevatedButton(
-                  onPressed: _isInitialized ? _testTTS : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        _isInitialized ? Colors.purple : Colors.grey,
-                  ),
-                  child: const Text('测试TTS'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Future<void> _leaveRoom() async {
+    if (!_isInitialized || !_isJoined) return;
 
-  /// 测试TTS功能（现通过AIGC服务实现）
-  Future<void> _testTTS() async {
     setState(() {
-      _status = '正在测试TTS...';
+      _status = '正在离开房间...';
     });
 
     try {
-      setState(() {
-        _status = '注意：独立TTS功能已移除，请通过startConversation使用TTS';
-      });
-
-      // 使用AIGC服务进行TTS测试
-      final success = await RtcAigcPlugin.startConversation(
-        welcomeMessage: "您好，我是语音助手，很高兴为您服务！",
-      );
-
-      if (success) {
-        setState(() {
-          _status = '会话已启动，播放欢迎语音';
-        });
-
-        // 等待3秒后发送测试文本
-        await Future.delayed(const Duration(seconds: 3));
-
-        // 发送测试消息让AI说话
-        await RtcAigcPlugin.sendTextMessage("请念一段测试语音，用于验证TTS功能。");
-        setState(() {
-          _status = 'TTS测试消息已发送';
-        });
-
-        // 5秒后停止会话
-        await Future.delayed(const Duration(seconds: 5));
-        // await RtcAigcPlugin.stopConversation();
-        setState(() {
-          _status = 'TTS测试完成，会话已停止';
-        });
-      } else {
-        setState(() {
-          _status = 'TTS测试失败：无法启动会话';
-        });
+      // 如果对话还在进行中，先停止对话
+      if (_isConversationActive) {
+        await RtcAigcPlugin.stopConversation();
       }
+
+      final success = await RtcAigcPlugin.leaveRoom();
+
+      setState(() {
+        if (success) {
+          _status = '已离开房间';
+          _isJoined = false;
+          _isConversationActive = false;
+          _messages.clear();
+          _currentSubtitle = '';
+        } else {
+          _status = '离开房间失败';
+        }
+      });
     } catch (e) {
       setState(() {
-        _status = 'TTS测试错误: $e';
+        _status = '错误: $e';
       });
     }
+  }
+
+  // 新增: 处理用户加入事件
+  void _handleUserJoined(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId != 'user1') {
+      setState(() {
+        _aiUserId = userId;
+        _addSystemMessage('AI助手已加入房间');
+      });
+    }
+  }
+  
+  // 新增: 处理用户离开事件
+  void _handleUserLeave(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId == _aiUserId) {
+      setState(() {
+        _aiUserId = null;
+        _isAiAudioCaptureStarted = false;
+        _isAiPublished = false;
+        _addSystemMessage('AI助手已离开房间');
+      });
+    }
+  }
+  
+  // 新增: 处理用户发布流事件
+  void _handleUserPublishStream(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId == _aiUserId) {
+      setState(() {
+        _isAiPublished = true;
+        _addSystemMessage('AI助手开始发布媒体流');
+      });
+    }
+  }
+  
+  // 新增: 处理用户取消发布流事件
+  void _handleUserUnpublishStream(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId == _aiUserId) {
+      setState(() {
+        _isAiPublished = false;
+        _addSystemMessage('AI助手停止发布媒体流');
+      });
+    }
+  }
+  
+  // 新增: 处理用户开始音频采集事件
+  void _handleUserStartAudioCapture(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId == _aiUserId) {
+      setState(() {
+        _isAiAudioCaptureStarted = true;
+        _addSystemMessage('AI助手开始音频采集');
+      });
+    }
+  }
+  
+  // 新增: 处理用户停止音频采集事件
+  void _handleUserStopAudioCapture(Map<String, dynamic> data) {
+    final userId = data['userId'];
+    if (userId != null && userId == _aiUserId) {
+      setState(() {
+        _isAiAudioCaptureStarted = false;
+        _addSystemMessage('AI助手停止音频采集');
+      });
+    }
+  }
+  
+  // 新增: 添加系统消息
+  void _addSystemMessage(String text) {
+    setState(() {
+      _messages.add({
+        'text': text,
+        'isUser': false,
+        'isSystem': true,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+    });
+    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('RTC AIGC Demo'),
-        actions: [
-          // 添加按钮导航到高级会话演示页面
-          IconButton(
-            icon: const Icon(Icons.chat),
-            tooltip: '高级会话演示',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const ConversationDemo(),
-                ),
-              );
-            },
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (!_isInitialized)
-              ElevatedButton(
-                onPressed: _initialize,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+      body: Column(
+        children: [
+          // 状态显示
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            color: Colors.grey.shade200,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('RTC状态: $_status'),
+                    Text('房间: ${_isJoined ? '已加入' : '未加入'}'),
+                    Text('对话: ${_isConversationActive ? '进行中' : '未开始'}'),
+                  ],
                 ),
-                child: const Text('初始化 SDK', style: TextStyle(fontSize: 16)),
-              ),
-
-            Text('Status: $_status'),
-            const SizedBox(height: 16),
-
-            if (_isInitialized) _buildControlPanel(),
-
-            const SizedBox(height: 16),
-            // 添加测试AI字幕按钮
-            if (_isInitialized)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Divider(),
-                  const Text('AI字幕测试',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                if (_isJoined)
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _testInterimSubtitle,
-                          child: const Text('测试临时字幕'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _testFinalSubtitle,
-                          child: const Text('测试最终字幕'),
-                        ),
-                      ),
+                      Text('AI说话: ${_isSpeaking ? '是' : '否'}'),
+                      Text('AI: ${_aiUserId ?? '未加入'}'),
+                      Text('音频: ${_isAiAudioCaptureStarted ? '已开始' : '未开始'}'),
                     ],
                   ),
-                  if (_currentSubtitle.isNotEmpty)
-                    local_widgets.SubtitleView(
-                      text: _currentSubtitle,
-                      isFinal: _isSubtitleFinal,
-                      isThinking: !_isSubtitleFinal && _currentSubtitle.isEmpty,
-                      onInterrupt: _isInitialized && _isConversationActive
-                          ? () => RtcAigcPlugin.stopConversation()
-                          : null,
-                    ),
-                ],
-              ),
-          ],
-        ),
+              ],
+            ),
+          ),
+
+          // 主内容区域
+          Expanded(
+            child: isMobile
+                ? _buildMobileLayout()
+                : _buildDesktopLayout(),
+          ),
+        ],
       ),
     );
   }
 
-  // 测试临时字幕
-  void _testInterimSubtitle() async {
-    try {
-      await RtcAigcPlugin.testAISubtitle(
-        text: '这是一段测试的临时字幕文本，AI正在思考和生成回答内容。这段文本可以实时更新以反映思维过程。',
-        isFinal: false,
-      );
-    } catch (e) {
-      debugPrint('测试临时字幕失败: $e');
-    }
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        // 对话区域
+        Expanded(
+          flex: 2,
+          child: _buildConversationArea(),
+        ),
+
+        // 控制面板
+        Container(
+          width: 200,
+          padding: const EdgeInsets.all(8.0),
+          color: Colors.grey.shade100,
+          child: _buildControlPanel(),
+        ),
+      ],
+    );
   }
 
-  // 测试最终字幕
-  void _testFinalSubtitle() async {
-    try {
-      await RtcAigcPlugin.testAISubtitle(
-        text: '这是一段测试的最终字幕文本。显示为绿色表示AI已完成回答，代表最终确认的内容。您可以继续对话了。',
-        isFinal: true,
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        // 对话区域
+        Expanded(
+          flex: 3,
+          child: _buildConversationArea(),
+        ),
+
+        // 控制面板 (折叠/展开)
+        ExpansionTile(
+          title: const Text('控制面板'),
+          backgroundColor: Colors.grey.shade100,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              child: _buildControlPanel(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConversationArea() {
+    return Column(
+      children: [
+        // 消息列表
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(8.0),
+            itemCount: _messages.length,
+            itemBuilder: (context, index) {
+              final message = _messages[index];
+              return _buildMessageItem(message);
+            },
+          ),
+        ),
+
+        // 字幕显示
+        if (_currentSubtitle.isNotEmpty || _isSpeaking)
+          local_widgets.SubtitleView(
+            text: _currentSubtitle,
+            isFinal: _isSubtitleFinal,
+            isThinking: _isSpeaking,
+            onInterrupt: _interruptConversation,
+          ),
+
+        // 消息输入区域
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  decoration: const InputDecoration(
+                    hintText: '输入消息...',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+              const SizedBox(width: 8.0),
+              ElevatedButton(
+                onPressed: _sendMessage,
+                child: const Text('发送'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildControlPanel() {
+    return Column(
+      children: [
+        // AI状态信息
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('AI状态', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4.0),
+                _buildStatusItem('AI用户ID', _aiUserId ?? '未加入'),
+                _buildStatusItem('音频采集', _isAiAudioCaptureStarted ? '已开始' : '未开始'),
+                _buildStatusItem('媒体发布', _isAiPublished ? '已发布' : '未发布'),
+              ],
+            ),
+          ),
+        ),
+        
+        // 房间控制
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('房间控制', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isInitialized && !_isJoined
+                      ? _joinRoom
+                      : null,
+                  child: const Text('加入房间'),
+                ),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isJoined && !_isConversationActive
+                      ? _startConversation
+                      : null,
+                  child: const Text('开始对话'),
+                ),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isConversationActive
+                      ? _stopConversation
+                      : null,
+                  child: const Text('停止对话'),
+                ),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isJoined ? _leaveRoom : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('离开房间'),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 音频设备控制
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('音频设备', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8.0),
+                const Text('输入设备:'),
+                DropdownButton<String>(
+                  value: _selectedAudioInputId,
+                  items: _audioInputDevices
+                      .map((device) => DropdownMenuItem(
+                            value: device['deviceId'],
+                            child: Text(device['label'] ?? ''),
+                          ))
+                      .toList(),
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await RtcAigcPlugin.setAudioInputDevice(
+                          value);
+                      setState(() {
+                        _selectedAudioInputId = value;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 8.0),
+                const Text('输出设备:'),
+                DropdownButton<String>(
+                  value: _selectedAudioOutputId,
+                  items: _audioOutputDevices
+                      .map((device) => DropdownMenuItem(
+                            value: device['deviceId'],
+                            child: Text(device['label'] ?? ''),
+                          ))
+                      .toList(),
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await RtcAigcPlugin.setAudioOutputDevice(
+                          value);
+                      setState(() {
+                        _selectedAudioOutputId = value;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 新增: 构建状态项
+  Widget _buildStatusItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: value.contains('未') || value.contains('不') 
+                  ? Colors.red.shade700 
+                  : Colors.green.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageItem(Map<String, dynamic> message) {
+    final isUser = message['isUser'] ?? false;
+    final isSystem = message['isSystem'] ?? false;
+    
+    if (isSystem) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 4.0),
+        padding: const EdgeInsets.all(8.0),
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          child: Text(
+            message['text'] ?? '',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
       );
-    } catch (e) {
-      debugPrint('测试最终字幕失败: $e');
     }
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: isUser ? Colors.blue.shade100 : Colors.white,
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            backgroundColor: isUser ? Colors.blue : Colors.green,
+            child: Icon(
+              isUser ? Icons.person : Icons.smart_toy,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isUser ? '我' : 'AI助手',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4.0),
+                Text(message['text'] ?? ''),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

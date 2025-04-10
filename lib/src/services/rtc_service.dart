@@ -111,8 +111,8 @@ class RtcService {
       _audioDevicesController.stream;
 
   /// 字幕流控制器
-  final StreamController<String> _subtitleController =
-      StreamController<String>.broadcast();
+  final StreamController<Map<String, dynamic>> _subtitleController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   /// 连接状态流控制器
   final StreamController<RtcConnectionState> _connectionStateController =
@@ -195,7 +195,7 @@ class RtcService {
   Stream<bool> get audioStatusStream => _audioStatusController.stream;
 
   /// 获取字幕流
-  Stream<String> get subtitleStream => _subtitleController.stream;
+  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
 
   /// 获取连接状态流
   Stream<RtcConnectionState> get connectionStateStream =>
@@ -1132,26 +1132,7 @@ class RtcService {
   /// 是否正在对话中
   bool get isInConversation => _isInConversation;
 
-  /// 获取用于测试的AI字幕
-  Future<bool> testAISubtitle(String text, {bool isFinal = false}) async {
-    try {
-      if (!_checkInitialized()) return false;
 
-      _subtitleController.add(text);
-
-      if (isFinal) {
-        // 模拟字幕结束
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _subtitleController.add('');
-        });
-      }
-
-      return true;
-    } catch (e) {
-      debugPrint('【RTC服务】测试AI字幕时发生错误: $e');
-      return false;
-    }
-  }
 
   /// 获取消息历史
   List<RtcAigcMessage> getMessageHistory() {

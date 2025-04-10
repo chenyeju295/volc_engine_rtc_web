@@ -14,7 +14,6 @@ library rtc_aigc_plugin;
 // 导出Web平台实现
 export 'rtc_aigc_plugin_web.dart';
 
-export 'src/services/service_interface.dart';
 
 // 导出客户端相关类
 export 'src/client/aigc_client.dart';
@@ -104,11 +103,13 @@ class RtcAigcPlugin {
   static void Function(List<dynamic> audioDevices)? _onAudioDevicesChanged;
   static void Function(Map<String, dynamic> subtitle)? _onSubtitle;
   
-  // 新增: 增加事件回调
+  // 新增: 增加更多RTC事件回调
   static void Function(Map<String, dynamic> data)? _onUserJoined;
+  static void Function(Map<String, dynamic> data)? _onUserLeave;
   static void Function(Map<String, dynamic> data)? _onUserPublishStream;
+  static void Function(Map<String, dynamic> data)? _onUserUnpublishStream;
   static void Function(Map<String, dynamic> data)? _onUserStartAudioCapture;
-  static void Function(Map<String, dynamic> data)? _onPlayerEvent;
+  static void Function(Map<String, dynamic> data)? _onUserStopAudioCapture;
 
   /// 用于监听字幕变化的流
   static Stream<Object?> get subtitleStream =>
@@ -168,6 +169,18 @@ class RtcAigcPlugin {
   static Stream<Map<String, dynamic>> get playerEventStream =>
       _webImpl?.playerEventStream ?? const Stream<Map<String, dynamic>>.empty();
 
+  /// 新增: 用户离开事件流
+  static Stream<Map<String, dynamic>> get userLeaveStream =>
+      _webImpl?.userLeaveStream ?? const Stream<Map<String, dynamic>>.empty();
+
+  /// 新增: 用户取消发布流事件流
+  static Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
+      _webImpl?.userUnpublishStreamStream ?? const Stream<Map<String, dynamic>>.empty();
+
+  /// 新增: 用户停止音频采集事件流
+  static Stream<Map<String, dynamic>> get userStopAudioCaptureStream =>
+      _webImpl?.userStopAudioCaptureStream ?? const Stream<Map<String, dynamic>>.empty();
+
   /// Factory constructor to enforce singleton instance of the plugin
   factory RtcAigcPlugin() => _instance;
 
@@ -205,10 +218,24 @@ class RtcAigcPlugin {
           }
           return;
           
+        case 'onUserLeave':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onUserLeave != null) {
+            _onUserLeave!(data);
+          }
+          return;
+          
         case 'onUserPublishStream':
           final data = Map<String, dynamic>.from(call.arguments);
           if (_onUserPublishStream != null) {
             _onUserPublishStream!(data);
+          }
+          return;
+          
+        case 'onUserUnpublishStream':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onUserUnpublishStream != null) {
+            _onUserUnpublishStream!(data);
           }
           return;
           
@@ -219,10 +246,10 @@ class RtcAigcPlugin {
           }
           return;
           
-        case 'onPlayerEvent':
+        case 'onUserStopAudioCapture':
           final data = Map<String, dynamic>.from(call.arguments);
-          if (_onPlayerEvent != null) {
-            _onPlayerEvent!(data);
+          if (_onUserStopAudioCapture != null) {
+            _onUserStopAudioCapture!(data);
           }
           return;
           
@@ -248,11 +275,13 @@ class RtcAigcPlugin {
     void Function(bool isPlaying)? onAudioStatusChange,
     void Function(List<dynamic> audioDevices)? onAudioDevicesChanged,
     void Function(Map<String, dynamic> subtitle)? onSubtitle,
-    // 新增事件回调
+    // 新增: 增加更多RTC事件回调参数
     void Function(Map<String, dynamic> data)? onUserJoined,
+    void Function(Map<String, dynamic> data)? onUserLeave,
     void Function(Map<String, dynamic> data)? onUserPublishStream,
+    void Function(Map<String, dynamic> data)? onUserUnpublishStream,
     void Function(Map<String, dynamic> data)? onUserStartAudioCapture,
-    void Function(Map<String, dynamic> data)? onPlayerEvent,
+    void Function(Map<String, dynamic> data)? onUserStopAudioCapture,
   }) async {
     try {
       // 确保Flutter binding已初始化
@@ -267,9 +296,11 @@ class RtcAigcPlugin {
       
       // 存储新增回调
       _onUserJoined = onUserJoined;
+      _onUserLeave = onUserLeave;
       _onUserPublishStream = onUserPublishStream;
+      _onUserUnpublishStream = onUserUnpublishStream;
       _onUserStartAudioCapture = onUserStartAudioCapture;
-      _onPlayerEvent = onPlayerEvent;
+      _onUserStopAudioCapture = onUserStopAudioCapture;
 
       if (kIsWeb && _webImpl != null) {
         // 使用Web实现
@@ -289,7 +320,7 @@ class RtcAigcPlugin {
         return result['success'] == true;
       } else {
         // 非Web平台使用方法通道
-        final result = await _channel.invokeMethod<bool>('initialize', {
+        final result = await _channel.invokeMethod('initialize', {
           'appId': appId,
           'roomId': roomId,
           'userId': userId,
@@ -301,7 +332,8 @@ class RtcAigcPlugin {
           if (llmConfig != null) 'llmConfig': llmConfig.toMap(),
         });
 
-        return result ?? false;
+        return result['success'] == true;
+
       }
     } catch (e) {
       debugPrint('Error initializing plugin: $e');
@@ -367,6 +399,13 @@ class RtcAigcPlugin {
     }
   }
 
+  static Future<bool> leaveRoom() async {
+    if (kIsWeb && _webImpl != null) {
+    return  await _webImpl!.handleMethodCall(MethodCall('leaveRoom'));
+    } else {
+      return  await _channel.invokeMethod('leaveRoom');
+    }
+  }
   /// Stop the current conversation
   static Future<bool> stopConversation() async {
     try {
@@ -598,9 +637,11 @@ class RtcAigcPlugin {
         _onSubtitle = null;
         // 清除新增的回调
         _onUserJoined = null;
+        _onUserLeave = null;
         _onUserPublishStream = null;
+        _onUserUnpublishStream = null;
         _onUserStartAudioCapture = null;
-        _onPlayerEvent = null;
+        _onUserStopAudioCapture = null;
         return result['success'] == true;
       } else {
         final result = await _channel.invokeMethod('dispose');
@@ -611,9 +652,11 @@ class RtcAigcPlugin {
         _onSubtitle = null;
         // 清除新增的回调
         _onUserJoined = null;
+        _onUserLeave = null;
         _onUserPublishStream = null;
+        _onUserUnpublishStream = null;
         _onUserStartAudioCapture = null;
-        _onPlayerEvent = null;
+        _onUserStopAudioCapture = null;
         return result;
       }
     } catch (e) {
@@ -680,9 +723,9 @@ class RtcAigcPlugin {
   
   /// 新增: 播放器事件处理
   static void handlePlayerEvent(Map<String, dynamic> data) {
-    if (_onPlayerEvent != null) {
-      _onPlayerEvent!(data);
-    }
+    // if (_onPlayerEvent != null) {
+    //   _onPlayerEvent!(data);
+    // }
   }
 
   /// 测试AI字幕功能（仅用于开发测试）

@@ -9,7 +9,6 @@ import 'rtc_service.dart';
 import 'rtc_engine_manager.dart';
 import 'rtc_device_manager.dart';
 import 'rtc_event_manager.dart';
-import 'service_interface.dart';
 
 /// Callback for handling state changes
 typedef StateChangeCallback = void Function(String state, String? message);
@@ -27,7 +26,7 @@ typedef AudioDevicesCallback = void Function(List<dynamic> devices);
 typedef SubtitleCallback = void Function(Map<String, dynamic> subtitle);
 
 /// Service manager for AIGC RTC services
-class ServiceManager implements Service {
+class ServiceManager   {
   /// Services configuration
   final RtcConfig config;
 
@@ -185,8 +184,6 @@ class ServiceManager implements Service {
     }
   }
 
-  /// Initialize all services
-  @override
   Future<bool> initialize() async {
     if (_isInitialized || _isDisposed) return true;
 
@@ -458,7 +455,7 @@ class ServiceManager implements Service {
   }
 
   /// Start a conversation
-  Future<bool> startConversation() async {
+  Future<bool> startConversation( ) async {
     if (!_isInitialized || _isDisposed) {
       debugPrint(
           'Cannot start conversation: Service not initialized or disposed');
@@ -728,7 +725,6 @@ class ServiceManager implements Service {
   }
 
   /// Start audio capture
-  @override
   Future<bool> startAudioCapture(String? deviceId) async {
     if (!_isInitialized || _isDisposed) {
       debugPrint(
@@ -757,21 +753,6 @@ class ServiceManager implements Service {
       return await _rtcService.stopAudioCapture();
     } catch (e) {
       debugPrint('Error stopping audio capture: $e');
-      return false;
-    }
-  }
-
-  /// Test a subtitle for debug purposes
-  Future<bool> testAISubtitle(String text, {bool isFinal = false}) async {
-    if (!_isInitialized || _isDisposed) {
-      debugPrint('Cannot test subtitle: Service not initialized or disposed');
-      return false;
-    }
-
-    try {
-      return await _rtcService.testAISubtitle(text, isFinal: isFinal);
-    } catch (e) {
-      debugPrint('Error testing AI subtitle: $e');
       return false;
     }
   }

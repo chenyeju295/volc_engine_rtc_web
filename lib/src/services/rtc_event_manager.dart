@@ -74,8 +74,8 @@ class RtcEventManager {
       StreamController<List<dynamic>>.broadcast();
   final StreamController<bool> _audioStatusController =
       StreamController<bool>.broadcast();
-  final StreamController<String> _subtitleController =
-      StreamController<String>.broadcast();
+  final StreamController<Map<String, dynamic>> _subtitleController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<String> _userJoinController =
       StreamController<String>.broadcast();
   final StreamController<String> _userLeaveController =
@@ -136,7 +136,7 @@ class RtcEventManager {
   Stream<List<dynamic>> get audioDevicesStream =>
       _audioDevicesController.stream;
   Stream<bool> get audioStatusStream => _audioStatusController.stream;
-  Stream<String> get subtitleStream => _subtitleController.stream;
+  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
   Stream<String> get userJoinStream => _userJoinController.stream;
   Stream<String> get userLeaveStream => _userLeaveController.stream;
   Stream<String> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
@@ -289,9 +289,8 @@ class RtcEventManager {
   /// 设置消息处理器监听
   void _setupMessageHandlerListeners() {
     _messageHandler.subtitleStream.listen((data) {
-      if (data != null && data.containsKey('text')) {
-        final text = data['text'] as String;
-        _subtitleController.add(text);
+      if (data.containsKey('text')) {
+        _subtitleController.add(data);
       }
     });
 
