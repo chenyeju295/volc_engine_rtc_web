@@ -134,6 +134,7 @@ class _ConversationDemoState extends State<ConversationDemo> {
           appId: '67eb953062b4b601a6df1348', // 替换为您的APP ID
           roomId: 'room1',
           userId: _userId,
+          taskId: _userId,
           token:
               '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 使用示例token
           serverUrl: "http://localhost:3001",
@@ -426,7 +427,6 @@ class _ConversationDemoState extends State<ConversationDemo> {
       final success = await RtcAigcPlugin.joinRoom(
         roomId: 'room1',
         userId: _userId,
-        welcomeMessage: '你好，我是AI助手，有什么可以帮你的吗？',
       );
 
       if (success) {
@@ -437,7 +437,7 @@ class _ConversationDemoState extends State<ConversationDemo> {
           'timestamp': DateTime.now().millisecondsSinceEpoch,
           'isFinal': true,
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('已成功加入房间'),

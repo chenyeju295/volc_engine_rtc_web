@@ -3,8 +3,47 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
+/// Message type constants matching web implementation
+class MessageType {
+  static const String BRIEF = 'conv';
+  static const String SUBTITLE = 'subv';
+  static const String FUNCTION_CALL = 'func';
+}
+
+/// Agent state constants matching web implementation
+class AgentBrief {
+  static const int UNKNOWN = 0;
+  static const int LISTENING = 1;
+  static const int THINKING = 2;
+  static const int SPEAKING = 3;
+  static const int INTERRUPTED = 4;
+  static const int FINISHED = 5;
+}
+
+/// Command type constants
+class CommandType {
+  static const String INTERRUPT = 'interrupt';
+  static const String EXTERNAL_TEXT_TO_SPEECH = 'ExternalTextToSpeech';
+  static const String EXTERNAL_TEXT_TO_LLM = 'ExternalTextToLLM';
+}
+
+/// Interrupt priority constants
+class InterruptPriority {
+  static const int NONE = 0;
+  static const int HIGH = 1;
+  static const int MEDIUM = 2;
+  static const int LOW = 3;
+}
+
 /// Utility class for handling RTC AIGC messages
 class RtcAigcMessageUtils {
+  /// Message type codes
+  static const Map<String, int> MESSAGE_TYPE_CODE = {
+    MessageType.SUBTITLE: 1,
+    MessageType.FUNCTION_CALL: 2,
+    MessageType.BRIEF: 3,
+  };
+
   /// Format a message for UI display
   static Map<String, dynamic> formatMessageForUI(Map<String, dynamic> message) {
     if (message.isEmpty) {
@@ -59,10 +98,10 @@ class RtcAigcMessageUtils {
                     !message['userId'].toString().contains('bot');
       
       return {
-        'type': 'subv',
+        'type': MessageType.SUBTITLE,
         'text': message['text'] ?? '',
         'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-        'isFinal': message['isFinal'] ?? true,
+        'isFinal': message['isFinal'] ?? message['definite'] ?? true,
         'isUser': isUser,
         'userId': message['userId'] ?? (isUser ? 'user' : 'bot'),
         'language': message['language'] ?? 'zh',
@@ -90,7 +129,7 @@ class RtcAigcMessageUtils {
       final formatted = formatMessageForUI(message);
 
       // Filter out non-subtitle or empty text messages
-      if (formatted['type'] == 'subv' &&
+      if (formatted['type'] == MessageType.SUBTITLE &&
           formatted['text'].toString().isNotEmpty) {
         result.add({
           'userId': formatted['userId'],
@@ -118,6 +157,7 @@ class RtcAigcMessageUtils {
       final typeBytes = Uint8List.view(buffer, 0, 4);
       String type = '';
       for (var i = 0; i < 4; i++) {
+        if (typeBytes[i] == 0) break; // Stop at null terminator
         type += String.fromCharCode(typeBytes[i]);
       }
 
@@ -140,11 +180,14 @@ class RtcAigcMessageUtils {
       final utf8Decoder = const Utf8Decoder();
       final value = utf8Decoder.convert(valueBytes);
 
+      debugPrint('【TLV解析】类型: $type, 长度: $length');
+      
       // Try to parse as JSON
       try {
         final jsonData = jsonDecode(value);
         return {'type': type, 'data': jsonData};
       } catch (e) {
+        debugPrint('【TLV解析】JSON解析失败，以文本形式返回: $e');
         return {'type': type, 'data': value};
       }
     } catch (e) {
@@ -153,20 +196,48 @@ class RtcAigcMessageUtils {
     }
   }
 
-  /// Message type codes
-  static const Map<String, int> MESSAGE_TYPE_CODE = {
-    'subv': 1, // 字幕消息
-    'func': 2, // 函数调用消息
-    'ctrl': 3, // 控制消息
-  };
-
-  /// AI state codes
-  static const Map<String, int> AGENT_STATE_CODE = {
-    'UNKNOWN': 0,
-    'LISTENING': 1,
-    'THINKING': 2,
-    'SPEAKING': 3,
-    'INTERRUPTED': 4,
-    'FINISHED': 5,
-  };
+  /// Create TLV data from string content and type
+  static ByteBuffer string2tlv(String content, String type) {
+    try {
+      // Validate type is 4 characters or less
+      if (type.length > 4) {
+        type = type.substring(0, 4);
+      } else if (type.length < 4) {
+        // Pad with nulls
+        type = type.padRight(4, '\u0000');
+      }
+      
+      // Convert content to UTF-8 bytes
+      final contentBytes = Uint8List.fromList(utf8.encode(content));
+      final contentLength = contentBytes.length;
+      
+      // Create type bytes (4 bytes)
+      final typeBytes = Uint8List(4);
+      for (var i = 0; i < 4; i++) {
+        if (i < type.length) {
+          typeBytes[i] = type.codeUnitAt(i);
+        } else {
+          typeBytes[i] = 0; // null padding
+        }
+      }
+      
+      // Create length bytes (4 bytes, big-endian)
+      final lengthBytes = Uint8List(4);
+      lengthBytes[0] = (contentLength >> 24) & 0xFF;
+      lengthBytes[1] = (contentLength >> 16) & 0xFF;
+      lengthBytes[2] = (contentLength >> 8) & 0xFF;
+      lengthBytes[3] = contentLength & 0xFF;
+      
+      // Combine all parts
+      final resultBytes = Uint8List(4 + 4 + contentLength);
+      resultBytes.setRange(0, 4, typeBytes);
+      resultBytes.setRange(4, 8, lengthBytes);
+      resultBytes.setRange(8, 8 + contentLength, contentBytes);
+      
+      return resultBytes.buffer;
+    } catch (e) {
+      debugPrint('【TLV创建】创建TLV数据失败: $e');
+      throw Exception('Failed to create TLV data: $e');
+    }
+  }
 } 

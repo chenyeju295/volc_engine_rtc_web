@@ -17,7 +17,7 @@ import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
 /// RTC AIGC Plugin for Web - Web平台专用实现
-/// 
+///
 /// 负责在Flutter Web环境中处理RTC和AIGC的交互逻辑
 /// 包含房间管理、对话控制、设备管理等功能
 class RtcAigcPluginWeb {
@@ -29,24 +29,26 @@ class RtcAigcPluginWeb {
 
   /// 用于监听字幕变化的流
   Stream<String> get subtitleStream =>
-      _serviceManager?.rtcService?.subtitleStream ?? const Stream<String>.empty();
+      _serviceManager?.rtcService.subtitleStream ??
+      const Stream<String>.empty();
 
   /// 用于监听AI状态变化的流
   Stream<RtcState> get stateStream =>
-      _serviceManager?.rtcService?.stateStream ?? const Stream<RtcState>.empty();
+      _serviceManager?.rtcService.stateStream ?? const Stream<RtcState>.empty();
 
   /// 用于监听音频状态变化的流
   Stream<bool> get audioStatusStream =>
-      _serviceManager?.rtcService?.audioStatusStream ?? const Stream<bool>.empty();
+      _serviceManager?.rtcService.audioStatusStream ??
+      const Stream<bool>.empty();
 
   /// 用于监听连接状态变化的流 (connected, disconnected, autoplay_failed等)
   Stream<ConnectionState> get connectionStateStream =>
-      _serviceManager?.rtcService?.connectionStateStream ?? 
+      _serviceManager?.rtcService.connectionStateStream ??
       const Stream<ConnectionState>.empty();
 
   /// 用于监听设备变化的流
   Stream<bool> get deviceStateStream =>
-      _serviceManager?.rtcService?.deviceStateStream ?? 
+      _serviceManager?.rtcService.deviceStateStream ??
       const Stream<bool>.empty();
 
   /// 用于监听消息历史变化的流
@@ -64,7 +66,7 @@ class RtcAigcPluginWeb {
     }
     return _serviceManager!.messageHistory;
   }
-  
+
   /// 用于监听字幕状态变化的流
   Stream<Map<String, dynamic>> get subtitleStateStream {
     if (_serviceManager == null) {
@@ -72,7 +74,7 @@ class RtcAigcPluginWeb {
     }
     return _serviceManager!.onSubtitleStateChanged;
   }
-  
+
   /// 用于监听音频属性变化的流 (音量等)
   Stream<Map<String, dynamic>> get audioPropertiesStream {
     if (_serviceManager == null) {
@@ -80,7 +82,7 @@ class RtcAigcPluginWeb {
     }
     return _serviceManager!.onAudioPropertiesChanged;
   }
-  
+
   /// 用于监听网络质量变化的流
   Stream<Map<String, dynamic>> get networkQualityStream {
     if (_serviceManager == null) {
@@ -90,7 +92,7 @@ class RtcAigcPluginWeb {
   }
 
   /// Web平台实现的注册方法
-  /// 
+  ///
   /// 注册插件并设置方法通道处理器
   static void registerWith(Registrar registrar) {
     // 创建一个通道以处理方法调用
@@ -109,7 +111,7 @@ class RtcAigcPluginWeb {
   }
 
   /// 处理来自Flutter的方法调用
-  /// 
+  ///
   /// 根据方法名分发到具体的处理函数
   Future<dynamic> handleMethodCall(MethodCall call) async {
     // 尝试解析调用参数
@@ -178,10 +180,10 @@ class RtcAigcPluginWeb {
         return await _handleLeaveRoom();
 
       case 'getCurrentAudioInputDevice':
-        return _serviceManager?.rtcService?.getCurrentAudioInputDeviceId();
+        return _serviceManager?.rtcService.getCurrentAudioInputDeviceId();
 
       case 'getCurrentAudioOutputDevice':
-        return _serviceManager?.rtcService?.getCurrentAudioOutputDeviceId();
+        return _serviceManager?.rtcService.getCurrentAudioOutputDeviceId();
 
       default:
         throw PlatformException(
@@ -193,7 +195,7 @@ class RtcAigcPluginWeb {
   }
 
   /// 初始化RTC服务
-  /// 
+  ///
   /// 创建并初始化RTC服务管理器
   Future<Map<String, dynamic>> _handleInitialize(
       Map<dynamic, dynamic>? args) async {
@@ -207,21 +209,23 @@ class RtcAigcPluginWeb {
 
       // 创建配置对象
       final config = RtcConfig(
-          appId: args['appId'],
-          roomId: args['roomId'],
-          userId: args['userId'],
-          token: args['token'],
-          serverUrl: args['serverUrl'],
-          // 添加默认的配置
-          asrConfig: args['asrConfig'] != null 
-              ? AsrConfig.fromMap(args['asrConfig']) 
-              : const AsrConfig(),
-          ttsConfig: args['ttsConfig'] != null 
-              ? TtsConfig.fromMap(args['ttsConfig']) 
-              : const TtsConfig(),
-          llmConfig: args['llmConfig'] != null 
-              ? LlmConfig.fromMap(args['llmConfig']) 
-              : const LlmConfig());
+        appId: args['appId'],
+        roomId: args['roomId'],
+        userId: args['userId'],
+        taskId: args['taskId'],
+        token: args['token'],
+        serverUrl: args['serverUrl'],
+        // 添加默认的配置
+        asrConfig: args['asrConfig'] != null
+            ? AsrConfig.fromMap(args['asrConfig'])
+            : const AsrConfig(),
+        ttsConfig: args['ttsConfig'] != null
+            ? TtsConfig.fromMap(args['ttsConfig'])
+            : const TtsConfig(),
+        llmConfig: args['llmConfig'] != null
+            ? LlmConfig.fromMap(args['llmConfig'])
+            : const LlmConfig(),
+      );
 
       // 创建服务管理器
       _serviceManager = ServiceManager(config: config);
@@ -230,8 +234,8 @@ class RtcAigcPluginWeb {
       await _serviceManager!.initialize();
 
       return {'success': true};
-    } catch (e) {
-      debugPrint('RTC AIGC Plugin initialize error: $e');
+    } catch (e, s) {
+      debugPrint('RTC AIGC Plugin initialize error: $e $s');
       return {'success': false, 'error': e.toString()};
     }
   }
@@ -247,18 +251,16 @@ class RtcAigcPluginWeb {
         );
       }
 
-      final serverUrl = args?['serverUrl'] as String?;
-      final roomId = args?['roomId'] as String? ?? _serviceManager!.config.roomId;
-      final userId = args?['userId'] as String? ?? _serviceManager!.config.userId;
+      final roomId =
+          args?['roomId'] as String? ?? _serviceManager!.config.roomId;
+      final userId =
+          args?['userId'] as String? ?? _serviceManager!.config.userId;
       final token = args?['token'] as String? ?? _serviceManager!.config.token;
-      final welcomeMessage = args?['welcomeMessage'] as String?;
-      
+
       final result = await _serviceManager!.joinRoom(
-        serverUrl: serverUrl,
         roomId: roomId,
         userId: userId,
         token: token ?? '',
-        welcomeMessage: welcomeMessage,
       );
 
       return {'success': result};
@@ -556,7 +558,8 @@ class RtcAigcPluginWeb {
       }
 
       final isFinal = args['isFinal'] as bool? ?? true;
-      final result = await _serviceManager!.testAISubtitle(text, isFinal: isFinal);
+      final result =
+          await _serviceManager!.testAISubtitle(text, isFinal: isFinal);
       return {'success': result};
     } catch (e) {
       debugPrint('RTC AIGC Plugin testAISubtitle error: $e');

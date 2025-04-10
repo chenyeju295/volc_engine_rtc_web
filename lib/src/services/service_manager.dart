@@ -61,31 +61,35 @@ class ServiceManager implements Service {
   /// Stream controller for subtitle state changes
   final StreamController<Map<String, dynamic>> _subtitleStateController =
       StreamController<Map<String, dynamic>>.broadcast();
-      
+
   /// Stream controller for audio properties changes
   final StreamController<Map<String, dynamic>> _audioPropertiesController =
       StreamController<Map<String, dynamic>>.broadcast();
-      
+
   /// Stream controller for network quality changes
   final StreamController<Map<String, dynamic>> _networkQualityController =
       StreamController<Map<String, dynamic>>.broadcast();
-      
+
   /// Stream controller for message history changes
   final StreamController<List<RtcAigcMessage>> _messageHistoryController =
       StreamController<List<RtcAigcMessage>>.broadcast();
 
   /// Subtitle state change stream
-  Stream<Map<String, dynamic>> get onSubtitleStateChanged => _subtitleStateController.stream;
-  
+  Stream<Map<String, dynamic>> get onSubtitleStateChanged =>
+      _subtitleStateController.stream;
+
   /// Audio properties change stream
-  Stream<Map<String, dynamic>> get onAudioPropertiesChanged => _audioPropertiesController.stream;
-  
+  Stream<Map<String, dynamic>> get onAudioPropertiesChanged =>
+      _audioPropertiesController.stream;
+
   /// Network quality change stream
-  Stream<Map<String, dynamic>> get onNetworkQualityChanged => _networkQualityController.stream;
-  
+  Stream<Map<String, dynamic>> get onNetworkQualityChanged =>
+      _networkQualityController.stream;
+
   /// Message history change stream
-  Stream<List<RtcAigcMessage>> get onMessageHistoryChanged => _messageHistoryController.stream;
-  
+  Stream<List<RtcAigcMessage>> get onMessageHistoryChanged =>
+      _messageHistoryController.stream;
+
   /// Current message history
   List<RtcAigcMessage> get messageHistory => _rtcService.getMessageHistory();
 
@@ -201,11 +205,11 @@ class ServiceManager implements Service {
       if (!engineInitResult) {
         throw Exception('Failed to initialize RTC engine');
       }
-      
+
       // 2. Get engine instance and set event manager BEFORE any further operations
       debugPrint('【服务管理器】正在设置事件处理器...');
       _engineManager.registerEventHandler(_eventManager);
-      
+
       // 3. Initialize RTC service with event manager already connected to engine
       final serviceInitResult = await _rtcService.initialize();
       if (!serviceInitResult) {
@@ -244,16 +248,16 @@ class ServiceManager implements Service {
       if (_onSubtitle != null) {
         _setupSubtitleListener();
       }
-      
+
       // Setup subtitle state listener
       _setupSubtitleStateListener();
-      
+
       // Setup audio properties listener
       _setupAudioPropertiesListener();
-      
+
       // Setup network quality listener
       _setupNetworkQualityListener();
-      
+
       // Setup message history listener
       _setupMessageHistoryListener();
 
@@ -353,7 +357,7 @@ class ServiceManager implements Service {
       debugPrint('Failed to setup message history listener: $e');
     }
   }
-  
+
   /// Set up subtitle state listener
   void _setupSubtitleStateListener() {
     try {
@@ -370,7 +374,7 @@ class ServiceManager implements Service {
       debugPrint('Failed to setup subtitle state listener: $e');
     }
   }
-  
+
   /// Set up audio properties listener
   void _setupAudioPropertiesListener() {
     try {
@@ -387,7 +391,7 @@ class ServiceManager implements Service {
       debugPrint('Failed to setup audio properties listener: $e');
     }
   }
-  
+
   /// Set up network quality listener
   void _setupNetworkQualityListener() {
     try {
@@ -406,13 +410,10 @@ class ServiceManager implements Service {
   }
 
   /// Join a room with the given parameters
-  @override
   Future<bool> joinRoom({
-    String? serverUrl,
     required String roomId,
     required String userId,
     required String token,
-    String? welcomeMessage,
   }) async {
     if (!_isInitialized || _isDisposed) {
       debugPrint('Cannot join room: Service not initialized or disposed');
@@ -438,12 +439,6 @@ class ServiceManager implements Service {
           _safeCallback(() => _onStateChange!('error', 'Failed to join room'));
         }
         return false;
-      }
-
-      // Start conversation
-      final startResult = await _rtcService.startConversation();
-      if (startResult) {
-        _isConversationActive = true;
       }
 
       // Notify state change
@@ -816,7 +811,7 @@ class ServiceManager implements Service {
         await _deviceStateSubscription!.cancel();
         _deviceStateSubscription = null;
       }
-      
+
       // Close all stream controllers
       _subtitleStateController.close();
       _audioPropertiesController.close();

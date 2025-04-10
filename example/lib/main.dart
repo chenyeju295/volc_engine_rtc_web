@@ -104,6 +104,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         appId: '67eb953062b4b601a6df1348', // 替换为您的APP ID
         roomId: 'room1', // 房间ID
         userId: 'user1', // 用户ID
+        taskId: 'user1',
         token:
             '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的Token
         serverUrl: "http://localhost:3001",
@@ -225,12 +226,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
     try {
       final success = await RtcAigcPlugin.joinRoom(
-        // 可以传递参数来覆盖初始化时的设置
-        // roomId: 'custom_room_id',
-        // userId: 'custom_user_id',
-        // token: 'custom_token',
-        welcomeMessage: '你好，我是AI助手，有什么可以帮你的吗？',
-      );
+          // 可以传递参数来覆盖初始化时的设置
+          // roomId: 'custom_room_id',
+          // userId: 'custom_user_id',
+          // token: 'custom_token',
+          );
 
       setState(() {
         if (success) {
@@ -340,75 +340,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         _status = 'Error sending message: $e';
       });
     }
-  }
-
-  // 添加字幕测试按钮
-  Widget _buildTestSubtitleSection() {
-    // 如果不是已连接状态，不显示此部分
-    if (_status != 'connected') {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      margin: const EdgeInsets.all(8.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '字幕测试工具',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              decoration: const InputDecoration(
-                hintText: '输入测试字幕内容',
-                border: OutlineInputBorder(),
-              ),
-              controller: _subtitleController,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                ElevatedButton(
-                  onPressed: () => _simulateSubtitle(false),
-                  child: const Text('模拟临时字幕'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () => _simulateSubtitle(true),
-                  child: const Text('模拟最终字幕'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 模拟字幕功能
-  void _simulateSubtitle(bool isFinal) {
-    if (_subtitleController.text.isEmpty) return;
-
-    RtcAigcPlugin.testAISubtitle(
-      text: _subtitleController.text,
-      isFinal: isFinal,
-    ).then((success) {
-      if (success) {
-        if (isFinal) {
-          _subtitleController.clear();
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('模拟字幕失败')),
-        );
-      }
-    });
   }
 
   Widget _buildControlPanel() {

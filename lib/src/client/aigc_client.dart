@@ -40,30 +40,32 @@ class AigcClient {
 
   /// HTTP 客户端
   final http.Client _httpClient;
-  
+
   /// 当前房间ID
-  String? _roomId;
-  
+  String roomId;
+
   /// 当前用户ID
-  String? _userId;
-  
+  String userId;
+
   /// 当前任务ID
-  String? _taskId;
-  
+  String taskId;
+
+  String token;
+
   /// 是否已连接
   bool _isConnected = false;
-  
+
   /// 客户端状态
   AigcClientState _state = AigcClientState.initial;
-  
+
   /// 消息流控制器
-  final StreamController<RtcAigcMessage> _messageController = 
+  final StreamController<RtcAigcMessage> _messageController =
       StreamController<RtcAigcMessage>.broadcast();
-  
+
   /// 状态流控制器
-  final StreamController<AigcClientState> _stateController = 
+  final StreamController<AigcClientState> _stateController =
       StreamController<AigcClientState>.broadcast();
-  
+
   /// 消息历史记录
   final List<RtcAigcMessage> _messageHistory = [];
 
@@ -71,24 +73,28 @@ class AigcClient {
   AigcClient({
     required this.baseUrl,
     required this.appId,
+    required this.roomId,
+    required this.userId,
+    required this.token,
+    required this.taskId,
     required this.asrConfig,
     required this.ttsConfig,
     required this.llmConfig,
     this.apiVersion = '2024-12-01',
   }) : _httpClient = http.Client();
-  
+
   /// 消息流
   Stream<RtcAigcMessage> get messageStream => _messageController.stream;
-  
+
   /// 状态流
   Stream<AigcClientState> get stateStream => _stateController.stream;
-  
+
   /// 是否已连接
   bool get isConnected => _isConnected;
-  
+
   /// 当前状态
   AigcClientState get state => _state;
-  
+
   /// 消息历史
   List<RtcAigcMessage> get messageHistory => List.unmodifiable(_messageHistory);
 
@@ -100,7 +106,7 @@ class AigcClient {
       _stateController.add(_state);
     }
   }
-  
+
   /// 添加消息并广播
   void _addMessage(RtcAigcMessage message) {
     _messageHistory.add(message);
@@ -184,126 +190,68 @@ class AigcClient {
       throw Exception('未知响应格式: ${jsonEncode(response)}');
     }
   }
-  
-  /// 连接到AIGC服务
-  Future<bool> connect({
-    required String roomId,
-    required String userId,
-    required String taskId,
-    String? welcomeMessage,
-  }) async {
-    debugPrint('[AigcClient] 连接到AIGC服务: $roomId, $userId, $taskId');
-    
-    if (_isConnected) {
-      debugPrint('[AigcClient] 已经连接，先断开');
-      await disconnect();
-    }
-    
-    _roomId = roomId;
-    _userId = userId;
-    _taskId = taskId;
-    
-    try {
-      _setState(AigcClientState.connecting);
-      
-      final result = await startVoiceChat(
-        roomId: roomId,
-        userId: userId,
-        taskId: taskId,
-        token: '',  // 此处token在RTCService中处理
-        welcomeMessage: welcomeMessage,
-      );
-      
-      if (result['Result'] == 'ok') {
-        _isConnected = true;
-        _setState(AigcClientState.ready);
-        
-        // 添加欢迎消息
-        _addMessage(RtcAigcMessage(
-          id: 'welcome_${DateTime.now().millisecondsSinceEpoch}',
-          type: MessageType.ai,
-          content: welcomeMessage ?? '你好，我是你的AI小助手，有什么可以帮你的吗？',
-          senderId: 'RobotMan_',
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        ));
-        
-        return true;
-      } else {
-        _setState(AigcClientState.error);
-        return false;
-      }
-    } catch (e) {
-      debugPrint('[AigcClient] 连接失败: $e');
-      _setState(AigcClientState.error);
-      return false;
-    }
-  }
-  
+
   /// 断开AIGC服务连接
   Future<bool> disconnect() async {
-    if (!_isConnected || _roomId == null || _userId == null || _taskId == null) {
+    if (!_isConnected) {
       debugPrint('[AigcClient] 未连接，无需断开');
       return true;
     }
-    
+
     try {
       final result = await stopVoiceChat(
-        roomId: _roomId!,
-        userId: _userId!,
-        taskId: _taskId!,
+        roomId: roomId,
+        userId: userId,
+        taskId: taskId,
       );
-      
+
       _isConnected = false;
       _setState(AigcClientState.initial);
-      
+
       return result['Result'] == 'ok';
     } catch (e) {
       debugPrint('[AigcClient] 断开连接失败: $e');
       _setState(AigcClientState.error);
       return false;
-    } finally {
-      _roomId = null;
-      _userId = null;
-      _taskId = null;
     }
   }
-  
+
   /// 发送消息给AI
   Future<bool> sendMessage(String text) async {
-    if (!_isConnected || _roomId == null || _userId == null || _taskId == null) {
+    if (!_isConnected) {
       debugPrint('[AigcClient] 未连接，无法发送消息');
       return false;
     }
-    
+
     try {
       // 添加用户消息到历史记录
       final userMessage = RtcAigcMessage(
         id: 'user_${DateTime.now().millisecondsSinceEpoch}',
         type: MessageType.user,
         content: text,
-        senderId: _userId,
+        senderId: userId,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
       _addMessage(userMessage);
-      
+
       // 更新状态为等待响应
       _setState(AigcClientState.responding);
-      
+
       // 发送更新命令给AI
       final params = {
         'AppId': appId,
-        'RoomId': _roomId,
-        'TaskId': _taskId,
+        'RoomId': roomId,
+        'TaskId': taskId,
         'Command': 'Text',
         'Message': text,
       };
-      
+
       final result = await _post(
         action: ActionType.updateVoiceChat,
         name: 'update',
         params: params,
       );
-      
+
       return result['Result'] == 'ok';
     } catch (e) {
       debugPrint('[AigcClient] 发送消息失败: $e');
@@ -311,29 +259,29 @@ class AigcClient {
       return false;
     }
   }
-  
+
   /// 取消AI响应（打断）
   Future<bool> cancelResponse() async {
-    if (!_isConnected || _roomId == null || _userId == null || _taskId == null) {
+    if (!_isConnected) {
       debugPrint('[AigcClient] 未连接，无法取消响应');
       return false;
     }
-    
+
     try {
       // 发送中断命令
       final params = {
         'AppId': appId,
-        'RoomId': _roomId,
-        'TaskId': _taskId,
+        'RoomId': roomId,
+        'TaskId': taskId,
         'Command': 'interrupt',
       };
-      
+
       final result = await _post(
         action: ActionType.updateVoiceChat,
         name: 'update',
         params: params,
       );
-      
+
       // 更新最后一条AI消息为中断状态
       for (int i = _messageHistory.length - 1; i >= 0; i--) {
         final message = _messageHistory[i];
@@ -344,10 +292,10 @@ class AigcClient {
           break;
         }
       }
-      
+
       // 更新状态为准备就绪
       _setState(AigcClientState.ready);
-      
+
       return result['Result'] == 'ok';
     } catch (e) {
       debugPrint('[AigcClient] 取消响应失败: $e');
@@ -357,34 +305,26 @@ class AigcClient {
 
   /// 开始语音对话
   Future<Map<String, dynamic>> startVoiceChat({
-    required String roomId,
-    required String userId,
-    required String token,
-    required String taskId,
     String? businessId,
     String? welcomeMessage,
-    AsrConfig? asrConfig,
-    TtsConfig? ttsConfig,
-    LlmConfig? llmConfig,
   }) async {
-    debugPrint('[AigcClient] 开始初始化startVoiceChat参数');
-    
+    _isConnected = true;
     // 使用与Web Demo一致的参数结构
     final Map<String, dynamic> params = {
       'AppId': appId,
       'RoomId': roomId,
-      'TaskId': taskId,  // TaskId实际上是用户ID
+      'TaskId': taskId, // TaskId实际上是用户ID
       'BusinessId': businessId,
-      
+
       // 添加AgentConfig，与Web Demo保持一致
       'AgentConfig': {
-        'UserId': 'RobotMan_',  // 使用固定的机器人ID
+        'UserId': 'RobotMan_', // 使用固定的机器人ID
         'WelcomeMessage': welcomeMessage ?? '你好，我是你的AI小助手，有什么可以帮你的吗？',
         'EnableConversationStateCallback': true,
         'ServerMessageSignatureForRTS': 'conversation',
         'TargetUserId': [userId], // TargetUserId是一个数组，包含用户ID
       },
-      
+
       // 添加Config配置，保持与Web Demo结构一致
       'Config': {
         'LLMConfig': {
@@ -393,10 +333,11 @@ class AigcClient {
           'MaxTokens': 1024,
           'Temperature': 0.1,
           'TopP': 0.3,
-          'SystemMessages': llmConfig?.systemMessages ?? ['你是一个智能助手，性格温和，善解人意，喜欢帮助别人，非常热心。'],
+          'SystemMessages':
+              llmConfig?.systemMessages ?? ['你是一个智能助手，性格温和，善解人意，喜欢帮助别人，非常热心。'],
           'ModelVersion': llmConfig?.modelVersion ?? '1.0',
         },
-        
+
         'ASRConfig': {
           'Provider': 'volcano',
           'ProviderParams': {
@@ -410,7 +351,7 @@ class AigcClient {
           },
           'VolumeGain': 0.3,
         },
-        
+
         'TTSConfig': {
           'Provider': 'volcano',
           'ProviderParams': {
@@ -425,18 +366,15 @@ class AigcClient {
           },
           'IgnoreBracketText': [1, 2, 3, 4, 5],
         },
-        
-        'InterruptMode': 0,  // 0表示启用中断模式
-        
+
+        'InterruptMode': 0, // 0表示启用中断模式
+
         'SubtitleConfig': {
           'SubtitleMode': 0,
         },
       },
     };
 
-    // 记录详细的请求参数
-    debugPrint('[AigcClient] startVoiceChat参数准备完成: ${jsonEncode(params)}');
-    
     return _post(
       action: ActionType.startVoiceChat,
       name: 'start',
@@ -446,9 +384,6 @@ class AigcClient {
 
   /// 更新语音对话
   Future<Map<String, dynamic>> updateVoiceChat({
-    required String roomId,
-    required String userId,
-    required String taskId,
     Map<String, dynamic>? asrConfig,
     Map<String, dynamic>? ttsConfig,
     Map<String, dynamic>? llmConfig,

@@ -3,71 +3,281 @@ import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'dart:js_interop';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /// Web utilities for handling JavaScript interop and resource loading
 class WebUtils {
-  /// Whether scripts are being loaded
-  static bool _areScriptsLoading = false;
-
-  /// Script loading completion
-  static Completer<bool>? _loadingCompleter;
-
-  /// SDKs to load
-  static final List<String> _sdks = [
-    'https://lf-unpkg.volccdn.com/obj/vcloudfe/sdk/@volcengine/rtc/4.66.1/1741254642340/volengine_Web_4.66.1.js',
-  ];
-
+  static const String sdkAssetPath = 'sdk/volengine_Web_4.66.1.js';
 
   /// Wait for SDK to load
   static Future<void> waitForSdkLoaded() async {
     final completer = Completer<void>();
-    
+
     try {
       // Check if RTC objects already exist
       if (!js.context.hasProperty('VERTC')) {
-        debugPrint('VERTC SDK not loaded, loading scripts...');
-        
         // Add event listener for script load
         await _loadVERTCScripts(completer);
       } else {
-        debugPrint('VERTC SDK already loaded');
         completer.complete();
       }
     } catch (e) {
       debugPrint('Error while loading SDK: $e');
       completer.completeError(e);
     }
-    
+
     return completer.future;
   }
-  
+
   /// Load VERTC scripts
   static Future<void> _loadVERTCScripts(Completer<void> completer) async {
     try {
-      // First load the SDK
-      for (final sdk in _sdks) {
-        await _loadScript(sdk);
+      // Try loading the SDK from assets first
+      try {
+        debugPrint('Loading SDK from Flutter assets: $sdkAssetPath');
+
+        // Get the correct asset URL for web
+        final sdkUrl = await _getAssetUrl(sdkAssetPath);
+        debugPrint('Resolved SDK URL: $sdkUrl');
+
+        if (sdkUrl == null) {
+          throw Exception('Could not resolve asset URL for $sdkAssetPath');
+        }
+
+        // Try to pre-fetch the script content to avoid MIME type issues
+        try {
+          debugPrint('Pre-fetching script content to avoid MIME type issues');
+          final scriptContent = await _fetchScriptContent(sdkUrl);
+          await _injectScriptContent(scriptContent);
+
+          // Verify if RTC objects were loaded - allow a moment for scripts to initialize
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          if (!js.context.hasProperty('VERTC')) {
+            throw Exception('SDK not loaded properly after pre-fetch attempt');
+          }
+
+          debugPrint('SDK loaded successfully via pre-fetch method');
+          completer.complete();
+          return;
+        } catch (preFetchError) {
+          debugPrint(
+              'Pre-fetch method failed, trying direct script tag: $preFetchError');
+
+          // Fallback to traditional script tag loading
+          final scriptElement = html.ScriptElement();
+          scriptElement.type = 'application/javascript';
+          scriptElement.src = sdkUrl;
+
+          // Create a completion mechanism
+          final scriptCompleter = Completer<void>();
+
+          scriptElement.onLoad.listen((_) {
+            debugPrint('Script loaded successfully: $sdkUrl');
+            scriptCompleter.complete();
+          });
+
+          scriptElement.onError.listen((event) {
+            debugPrint('Error loading script: $sdkUrl');
+            scriptCompleter.completeError('Failed to load script: $sdkUrl');
+          });
+
+          // Add to document
+          html.document.head!.append(scriptElement);
+
+          // Wait for script to load
+          await scriptCompleter.future;
+
+          // Verify if RTC objects were loaded - allow a moment for scripts to initialize
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          // Final verification
+          if (!js.context.hasProperty('VERTC')) {
+            throw Exception(
+                'Volcano Engine RTC SDK not loaded properly - VERTC object not found');
+          }
+
+          debugPrint('Volcano Engine RTC SDK loaded successfully');
+          completer.complete();
+        }
+      } catch (e) {
+        debugPrint('Error with asset loading approach: $e');
+
+        // Fallback to loading the script inline from assets
+        try {
+          debugPrint(
+              'Trying fallback: load script content directly from assets');
+          await _loadScriptFromAssets(sdkAssetPath);
+
+          // Verify if RTC objects were loaded
+          if (!js.context.hasProperty('VERTC')) {
+            throw Exception('SDK not loaded properly after fallback attempt');
+          }
+
+          debugPrint('Volcano Engine RTC SDK loaded successfully via fallback');
+          completer.complete();
+        } catch (fallbackError) {
+          debugPrint('Error with all local loading approaches: $fallbackError');
+          completer.completeError(
+              'Failed to load SDK from local assets: $fallbackError');
+        }
       }
-
-      // Wait a moment to ensure SDK is initialized
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Verify SDK objects exist
-      if (!js.context.hasProperty('VERTC') ) {
-        throw Exception(
-            'Volcano Engine RTC SDK not loaded properly - VERTC object not found');
-      }
-      debugPrint('Volcano Engine RTC SDK loaded successfully');
-
-      // Wait a moment for the interop scripts to initialize
-      await Future.delayed(const Duration(milliseconds: 200));
-      
-      completer.complete();
     } catch (e) {
       debugPrint('Failed to load VERTC scripts: $e');
       completer.completeError(e);
     }
+  }
+
+  /// Fetch script content via XMLHttpRequest to handle MIME type issues
+  static Future<String> _fetchScriptContent(String url) async {
+    final completer = Completer<String>();
+
+    try {
+      debugPrint('Fetching script content from: $url');
+
+      // Create an XMLHttpRequest
+      final request = html.HttpRequest();
+      request.open('GET', url);
+
+      // Set responseType to text
+      request.responseType = 'text';
+
+      // Set up event listeners
+      request.onLoad.listen((_) {
+        if (request.status == 200) {
+          final content = request.responseText;
+          if (content != null && content.isNotEmpty) {
+            debugPrint(
+                'Successfully fetched script content (${content.length} bytes)');
+            completer.complete(content);
+          } else {
+            completer.completeError('Empty content received');
+          }
+        } else {
+          completer.completeError(
+              'Failed to fetch script: ${request.status} ${request.statusText}');
+        }
+      });
+
+      request.onError.listen((_) {
+        completer.completeError('Error fetching script: ${request.statusText}');
+      });
+
+      // Send the request
+      request.send();
+    } catch (e) {
+      debugPrint('Error in fetch script content: $e');
+      completer.completeError('Error fetching script: $e');
+    }
+
+    return completer.future;
+  }
+
+  /// Get the correct URL for an asset in web
+  static Future<String?> _getAssetUrl(String assetPath) async {
+    try {
+      // In web, assets are served from a different location based on build mode
+
+      // Try both formats commonly used in Flutter web
+      final String packagePath = 'packages/rtc_aigc_plugin/$assetPath';
+
+      // In debug mode
+      if (kDebugMode) {
+        return 'assets/$packagePath';
+      } else {
+        // In release mode - try to find the asset in manifest
+        try {
+          final String manifestContent =
+              await rootBundle.loadString('AssetManifest.json');
+          final Map<String, dynamic> manifest = json.decode(manifestContent);
+
+          // Try finding the asset with different path patterns
+          for (final key in manifest.keys) {
+            if (key.endsWith(assetPath) || key.endsWith(packagePath)) {
+              debugPrint('Found asset in manifest: $key');
+              return key;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading asset manifest: $e');
+        }
+
+        // Fallback - use standard paths
+        return 'assets/$packagePath';
+      }
+    } catch (e) {
+      debugPrint('Error resolving asset URL: $e');
+      // Try a direct path as last resort
+      return assetPath;
+    }
+  }
+
+  /// Load a script from Flutter assets
+  static Future<void> _loadScriptFromAssets(String assetPath) async {
+    debugPrint('Loading script content from assets: $assetPath');
+
+    try {
+      // Try different asset paths
+      final List<String> potentialPaths = [
+        assetPath,
+        'packages/rtc_aigc_plugin/$assetPath',
+        'assets/packages/rtc_aigc_plugin/$assetPath',
+        'assets/$assetPath',
+      ];
+
+      // Try each path in sequence until one works
+      Exception? lastError;
+      for (final path in potentialPaths) {
+        try {
+          debugPrint('Trying to load from: $path');
+          final String jsContent = await rootBundle.loadString(path);
+          if (jsContent.isNotEmpty) {
+            debugPrint(
+                'Successfully loaded script content from: $path (${jsContent.length} bytes)');
+            await _injectScriptContent(jsContent);
+            return;
+          }
+        } catch (e) {
+          lastError = Exception('Failed to load from $path: $e');
+          debugPrint('Error loading from $path: $e');
+          // Continue to next path
+        }
+      }
+
+      // If we get here, all paths failed
+      throw lastError ?? Exception('Failed to load asset from any path');
+    } catch (e) {
+      debugPrint('Error loading script from assets: $e');
+      throw Exception('Failed to load script from assets: $e');
+    }
+  }
+
+  /// Inject JS content into a script tag
+  static Future<void> _injectScriptContent(String jsContent) async {
+    final completer = Completer<void>();
+
+    // Create script element
+    final scriptElement = html.ScriptElement();
+    scriptElement.type = 'application/javascript';
+    scriptElement.text = jsContent;
+
+    // Add event listeners
+    scriptElement.onLoad.listen((_) {
+      debugPrint('Script content executed successfully');
+      completer.complete();
+    });
+
+    scriptElement.onError.listen((event) {
+      debugPrint('Failed to execute script content');
+      completer.completeError('Failed to execute script content');
+    });
+
+    // Append to document
+    html.document.head!.append(scriptElement);
+
+    return completer.future;
   }
 
   /// Safely call a JavaScript method, handling null objects and exceptions
@@ -84,7 +294,7 @@ class WebUtils {
         debugPrint('Warning: JavaScript object does not have method: $method');
         return null;
       }
-      
+
       // 调用方法
       if (args != null) {
         // 确保所有函数参数都用allowInterop包装
@@ -94,12 +304,12 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
-        return jsObject is js.JsObject 
+
+        return jsObject is js.JsObject
             ? jsObject.callMethod(method, wrappedArgs)
             : js_util.callMethod(jsObject, method, wrappedArgs);
       } else {
-        return jsObject is js.JsObject 
+        return jsObject is js.JsObject
             ? jsObject.callMethod(method)
             : js_util.callMethod(jsObject, method, []);
       }
@@ -118,20 +328,20 @@ class WebUtils {
       return null;
     }
   }
-  
+
   /// Call a JavaScript method that returns a Promise
   static dynamic callMethod(dynamic jsObject, String method,
       [List<dynamic>? args]) {
     if (jsObject == null) {
       throw Exception('JavaScript object is null, cannot call $method');
     }
-    
+
     try {
       // 检查是否存在该方法（仅对js.JsObject类型有效）
       if (jsObject is js.JsObject && !jsObject.hasProperty(method)) {
         throw Exception('JavaScript object does not have method: $method');
       }
-      
+
       if (args != null) {
         return js_util.callMethod(jsObject, method, args);
       } else {
@@ -152,13 +362,13 @@ class WebUtils {
       throw Exception('Failed to call $method: $e');
     }
   }
-  
+
   /// Convert a JavaScript Promise to a Dart Future
   static Future<T> promiseToFuture<T>(dynamic jsPromise) {
     if (jsPromise == null) {
       throw Exception('Promise is null');
     }
-    
+
     try {
       return js_util.promiseToFuture<T>(jsPromise);
     } catch (e) {
@@ -167,97 +377,41 @@ class WebUtils {
     }
   }
 
-  /// Check if a JavaScript object exists
-  static bool jsObjectExists(String objectName) {
+  /// Check if SDK is loaded and initialized
+  static bool isSdkLoaded() {
     try {
-      return js.context.hasProperty(objectName);
+      // Check if SDK global object exists
+      if (js.context.hasProperty('VERTC')) {
+        return true;
+      }
+      return false;
     } catch (e) {
-      debugPrint('Error checking if object exists: $e');
+      debugPrint('Error checking if SDK is loaded: $e');
       return false;
     }
   }
 
-  /// Check if scripts are already loaded
-  static bool _areScriptsAlreadyLoaded() {
-    // Check if RTC object already exists (must check both old and new SDK object names)
-    if (js.context.hasProperty('VERTC') ) {
-      debugPrint('Volcano Engine RTC SDK already loaded');
-      return true;
-    }
-
-    // Check if script tags already exist
-    final scripts = html.document.querySelectorAll('script');
-    bool sdksLoaded = true;
-
-    // Check if SDKs are loaded
-    for (final sdk in _sdks) {
-      bool found = false;
-      for (final script in scripts) {
-        final src = script.getAttribute('src') ?? '';
-        if (src.contains(_getScriptBaseName(sdk))) {
-          found = true;
-          break;
+  /// Check if VERTC objects are loaded and accessible
+  static bool isVertcLoaded() {
+    try {
+      if (js.context.hasProperty('VERTC')) {
+        // Try accessing a property to verify it's properly initialized
+        try {
+          final version = js.context['VERTC']['version'];
+          debugPrint('VERTC SDK loaded, version: $version');
+          return true;
+        } catch (propError) {
+          debugPrint(
+              'VERTC object exists but may not be fully initialized: $propError');
+          return js.context
+              .hasProperty('VERTC'); // Return true if the object exists at all
         }
       }
-      if (!found) {
-        sdksLoaded = false;
-        break;
-      }
+      return false;
+    } catch (e) {
+      debugPrint('Error checking VERTC loaded status: $e');
+      return false;
     }
-
-    return sdksLoaded  ;
-  }
-
-  /// Check if SDK is loaded
-  static bool isSdkLoaded() {
-    if (js.context.hasProperty('VERTC')) {
-      return true;
-    }
-    return false;
-  }
-
-  /// Check if VERTC objects are loaded
-  static bool isVertcLoaded() {
-    return js.context.hasProperty('VERTC');
-  }
-
-  /// Get the base name of a script path
-  static String _getScriptBaseName(String path) {
-    final parts = path.split('/');
-    return parts.last;
-  }
-
-  /// Load a script and return a future that completes when the script is loaded
-  static Future<void> _loadScript(String url) async {
-    // Check if already loaded
-    final scripts = html.document.querySelectorAll('script');
-    for (final script in scripts) {
-      final src = script.getAttribute('src') ?? '';
-      if (src.contains(_getScriptBaseName(url))) {
-        debugPrint('Script already loaded: $url');
-        return;
-      }
-    }
-
-    debugPrint('Loading script: $url');
-    final completer = Completer<void>();
-    
-    final scriptElement = html.ScriptElement();
-    scriptElement.type = 'text/javascript';
-    scriptElement.src = url;
-    
-    scriptElement.onLoad.listen((_) {
-      debugPrint('Script loaded: $url');
-      completer.complete();
-    });
-    
-    scriptElement.onError.listen((event) {
-      debugPrint('Failed to load script: $url');
-      completer.completeError('Failed to load script: $url');
-    });
-    
-    html.document.head!.append(scriptElement);
-    return completer.future;
   }
 
   /// Debug print wrapper for logging
@@ -284,7 +438,7 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
+
         result = js_util.callMethod(jsObject, method, wrappedArgs);
       } else {
         result = js_util.callMethod(jsObject, method, []);
@@ -333,7 +487,7 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
+
         result = js_util.callMethod(obj, methodName, wrappedArgs);
       } else {
         result = js_util.callMethod(obj, methodName, []);
@@ -380,7 +534,7 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
+
         return js_util.callMethod(obj, methodName, wrappedArgs);
       } else {
         return js_util.callMethod(obj, methodName, []);
@@ -431,7 +585,7 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
+
         return js_util.callMethod(jsObject, method, wrappedArgs);
       } else {
         return js_util.callMethod(jsObject, method, []);
@@ -509,9 +663,10 @@ class WebUtils {
           }
           return arg;
         }).toList();
-        
+
         // Use callMethod with apply to ensure proper method binding
-        result = js_util.callMethod(methodFunc, 'apply', [jsObject, js_util.jsify(wrappedArgs)]);
+        result = js_util.callMethod(
+            methodFunc, 'apply', [jsObject, js_util.jsify(wrappedArgs)]);
       } else {
         // Call method with empty args array
         result = js_util.callMethod(methodFunc, 'apply', [jsObject, []]);
@@ -526,11 +681,11 @@ class WebUtils {
       return result;
     } catch (e) {
       debugPrint('Error calling async $method: $e');
-      
+
       // Fallback approach using direct method call
       try {
         debugPrint('Trying fallback approach for $method');
-        
+
         // Check if any args are functions and wrap them with allowInterop
         List<dynamic>? wrappedArgs;
         if (args != null) {
@@ -541,7 +696,7 @@ class WebUtils {
             return arg;
           }).toList();
         }
-        
+
         final result = wrappedArgs != null
             ? js_util.callMethod(jsObject, method, wrappedArgs)
             : js_util.callMethod(jsObject, method, []);
@@ -621,18 +776,20 @@ class WebUtils {
 
       // Call enumerateAudioCaptureDevices directly (similar to the TS implementation)
       debugPrint('Calling VERTC.enumerateAudioCaptureDevices()');
-      final devicesPromise = js_util.callMethod(vertcObj, 'enumerateAudioCaptureDevices', []);
-      
+      final devicesPromise =
+          js_util.callMethod(vertcObj, 'enumerateAudioCaptureDevices', []);
+
       // Convert to Future and return
       final devices = await js_util.promiseToFuture(devicesPromise);
-      debugPrint('Got ${js_util.getProperty(devices, 'length')} audio input devices');
+      debugPrint(
+          'Got ${js_util.getProperty(devices, 'length')} audio input devices');
       return devices;
     } catch (e) {
       debugPrint('Error getting audio input devices: $e');
       return [];
     }
   }
-  
+
   /// Get audio output devices - Direct implementation based on RtcClient.ts
   static Future<List<dynamic>> getAudioOutputDevices() async {
     try {
@@ -650,11 +807,13 @@ class WebUtils {
 
       // Call enumerateAudioPlaybackDevices directly (similar to the TS implementation)
       debugPrint('Calling VERTC.enumerateAudioPlaybackDevices()');
-      final devicesPromise = js_util.callMethod(vertcObj, 'enumerateAudioPlaybackDevices', []);
-      
+      final devicesPromise =
+          js_util.callMethod(vertcObj, 'enumerateAudioPlaybackDevices', []);
+
       // Convert to Future and return
       final devices = await js_util.promiseToFuture(devicesPromise);
-      debugPrint('Got ${js_util.getProperty(devices, 'length')} audio output devices');
+      debugPrint(
+          'Got ${js_util.getProperty(devices, 'length')} audio output devices');
       return devices;
     } catch (e) {
       debugPrint('Error getting audio output devices: $e');

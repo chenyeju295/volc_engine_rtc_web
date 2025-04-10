@@ -10,6 +10,10 @@ import 'package:rtc_aigc_plugin/src/config/config.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
 
+// 导入消息类型常量
+import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart'
+    show MessageType, AgentBrief, CommandType, InterruptPriority;
+
 /// Handles message processing and TLV parsing
 class RtcMessageHandler {
   final RtcConfig config;
@@ -82,7 +86,7 @@ class RtcMessageHandler {
       // 尝试使用TLV解析
       final parsedData = RtcAigcMessageUtils.parseTlvMessage(message);
       if (parsedData == null) {
-        debugPrint('【消息处理】尝试直接解析消息体...');
+        debugPrint('【消息处理】TLV解析失败，尝试直接解析消息体...');
         // 尝试直接解析二进制消息
         try {
           final String directText = WebUtils.binaryToString(message);
@@ -120,24 +124,39 @@ class RtcMessageHandler {
       debugPrint('【消息处理】处理消息类型: $messageType');
 
       switch (messageType) {
-        case 'subv': // SUBTITLE - 字幕消息
+        case MessageType.SUBTITLE: // 字幕消息
           debugPrint('【消息处理】解析到字幕消息');
           handleSubtitleMessage(data);
           break;
-        case 'func': // FUNCTION_CALL - 函数调用消息
+        case MessageType.FUNCTION_CALL: // 函数调用消息
           debugPrint('【消息处理】解析到函数调用消息');
           _handleFunctionCallMessage(data);
           break;
-        case 'ctrl': // CONTROL - 控制消息，包含AI状态变化
-          debugPrint('【消息处理】解析到控制消息');
-          _handleControlMessage(data);
-          break;
-        case 'conv': // 在js端对应MESSAGE_TYPE.BRIEF
+        case MessageType.BRIEF: // 会话状态消息
           debugPrint('【消息处理】解析到会话状态消息');
           _handleStateMessage(data);
           break;
+        case 'ctrl': // 控制消息，包含AI状态变化 (兼容旧实现)
+          debugPrint('【消息处理】解析到控制消息 (兼容模式)');
+          _handleControlMessage(data);
+          break;
         default:
           debugPrint('【消息处理】未知的消息类型: $messageType');
+          // 尝试检查是否有特定字段来推断消息类型
+          if (data is Map) {
+            if (data['Stage'] != null) {
+              debugPrint('【消息处理】检测到Stage字段，按状态消息处理');
+              _handleStateMessage(data);
+            } else if (data['tool_calls'] != null) {
+              debugPrint('【消息处理】检测到tool_calls字段，按函数调用消息处理');
+              _handleFunctionCallMessage(data);
+            } else if (data['text'] != null || (data['data'] != null && data['data'] is List)) {
+              debugPrint('【消息处理】检测到text或data字段，按字幕消息处理');
+              handleSubtitleMessage(data);
+            } else {
+              debugPrint('【消息处理】无法识别的消息格式: ${jsonEncode(data).substring(0, min(200, jsonEncode(data).length))}...');
+            }
+          }
           break;
       }
     } catch (e, stackTrace) {
@@ -394,18 +413,74 @@ class RtcMessageHandler {
 
       debugPrint('【状态处理】AI状态更新: $code - $description');
 
-      // 构建状态消息
-      final stateMap = {
-        'state': _getStateStringFromCode(code),
-        'stateCode': code,
-        'description': description,
-        'isThinking': code == 2, // THINKING
-        'isTalking': code == 3, // SPEAKING
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
-
-      // 发送状态更新到消息流
-      _messageHistoryController.add(stateMap);
+      // 更新状态信息
+      switch (code) {
+        case AgentBrief.THINKING:
+          debugPrint('【状态处理】AI开始思考');
+          // 构建状态消息
+          final stateMap = {
+            'state': 'THINKING',
+            'stateCode': code,
+            'description': description,
+            'isThinking': true,
+            'isTalking': false,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _messageHistoryController.add(stateMap);
+          break;
+          
+        case AgentBrief.SPEAKING:
+          debugPrint('【状态处理】AI开始说话');
+          final stateMap = {
+            'state': 'SPEAKING',
+            'stateCode': code,
+            'description': description,
+            'isThinking': false,
+            'isTalking': true,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _messageHistoryController.add(stateMap);
+          break;
+          
+        case AgentBrief.FINISHED:
+          debugPrint('【状态处理】AI停止说话');
+          final stateMap = {
+            'state': 'FINISHED',
+            'stateCode': code,
+            'description': description,
+            'isThinking': false,
+            'isTalking': false,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _messageHistoryController.add(stateMap);
+          break;
+          
+        case AgentBrief.INTERRUPTED:
+          debugPrint('【状态处理】AI被打断');
+          final stateMap = {
+            'state': 'INTERRUPTED',
+            'stateCode': code,
+            'description': description,
+            'isThinking': false,
+            'isTalking': false,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _messageHistoryController.add(stateMap);
+          break;
+          
+        default:
+          // 其他状态码
+          final stateMap = {
+            'state': _getStateStringFromCode(code),
+            'stateCode': code,
+            'description': description,
+            'isThinking': false,
+            'isTalking': false,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          };
+          _messageHistoryController.add(stateMap);
+          break;
+      }
 
       debugPrint('【状态处理】状态已更新并通知UI');
     } catch (e) {
@@ -454,26 +529,38 @@ class RtcMessageHandler {
 
       // 提取函数名和参数
       final functionName = function['name'];
-      final functionArgs = function['arguments'];
+      String functionArgs = function['arguments'];
       final toolCallId = toolCall['id'];
+
+      // 确保参数是字符串格式
+      if (functionArgs is! String) {
+        functionArgs = jsonEncode(functionArgs);
+      }
 
       debugPrint('【函数调用】函数名: $functionName, 工具ID: $toolCallId');
       debugPrint('【函数调用】参数: $functionArgs');
+
+      // 尝试将参数解析为JSON对象
+      dynamic parsedArgs;
+      try {
+        parsedArgs = jsonDecode(functionArgs);
+      } catch (e) {
+        debugPrint('【函数调用】解析参数失败，使用原始字符串: $e');
+        parsedArgs = functionArgs;
+      }
 
       // 发送到函数流
       final functionCallData = {
         'id': toolCallId,
         'name': functionName,
-        'arguments':
-            functionArgs is String ? jsonDecode(functionArgs) : functionArgs,
+        'arguments': parsedArgs,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
       _functionCallController.add(functionCallData);
 
       // 自动响应特定函数调用
-      _autoRespondToFunctionCall(toolCallId, functionName,
-          functionArgs is String ? jsonDecode(functionArgs) : functionArgs);
+      _autoRespondToFunctionCall(toolCallId, functionName, parsedArgs);
     } catch (e) {
       debugPrint('【函数调用】解析函数调用消息失败: $e');
     }
@@ -490,8 +577,20 @@ class RtcMessageHandler {
       };
 
       // 根据函数名生成响应
-      switch (functionName) {
-        case 'get_time':
+      switch (functionName.toLowerCase().replaceAll('_', '')) {
+        case 'getcurrentweather':
+          responseContent['Content'] = '今天下雪，最低气温零下10度';
+          break;
+
+        case 'musicplayer':
+          responseContent['Content'] = '查询到李四的歌曲，名称是千里之内';
+          break;
+
+        case 'sendmessage':
+          responseContent['Content'] = '发送成功';
+          break;
+
+        case 'gettime':
           final now = DateTime.now();
           responseContent['Content'] = {
             'current_time': now.toIso8601String(),
@@ -499,7 +598,7 @@ class RtcMessageHandler {
           };
           break;
 
-        case 'get_user_info':
+        case 'getuserinfo':
           responseContent['Content'] = {
             'name': 'Flutter用户',
             'id': config.userId,
@@ -509,22 +608,22 @@ class RtcMessageHandler {
           break;
 
         default:
-          responseContent['Content'] = {
-            'error': '未实现的功能',
-            'message': '当前Flutter插件未实现该功能的自动响应',
-          };
+          responseContent['Content'] = '未实现的功能';
           break;
       }
 
       // 发送响应给AIGC
       if (_rtcClient != null) {
-        final tlvData = jsonEncode(responseContent);
+        // 将响应转换为JSON字符串
+        final responseJson = jsonEncode(responseContent);
+        
+        // 创建TLV数据
+        final tlvBuffer = RtcAigcMessageUtils.string2tlv(responseJson, MessageType.FUNCTION_CALL);
+        
+        // 发送到RobotMan_
+        WebUtils.safeJsCall(_rtcClient, 'sendUserBinaryMessage', ['RobotMan_', tlvBuffer]);
 
-        // 调用JavaScript方法发送响应
-        WebUtils.safeJsCall(_rtcClient, 'sendMessageToBot', [tlvData]);
-
-        debugPrint(
-            '【函数调用】已发送自动响应: ${jsonEncode(responseContent).substring(0, min(100, jsonEncode(responseContent).length))}...');
+        debugPrint('【函数调用】已发送自动响应: ${responseJson.substring(0, min(100, responseJson.length))}...');
       } else {
         debugPrint('【函数调用】无法发送响应：RTC客户端未初始化');
       }

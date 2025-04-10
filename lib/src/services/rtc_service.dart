@@ -57,7 +57,8 @@ class RtcService {
       StreamController<List<dynamic>>.broadcast();
 
   /// 音频设备流
-  Stream<List<dynamic>> get audioDevicesStream => _audioDevicesController.stream;
+  Stream<List<dynamic>> get audioDevicesStream =>
+      _audioDevicesController.stream;
 
   /// 字幕流控制器
   final StreamController<String> _subtitleController =
@@ -113,6 +114,10 @@ class RtcService {
         asrConfig: _config.asrConfig,
         ttsConfig: _config.ttsConfig,
         llmConfig: _config.llmConfig,
+        roomId: _config.roomId,
+        userId: _config.userId,
+        token: _config.token,
+        taskId: _config.taskId,
       );
 
       // 注册事件监听
@@ -312,34 +317,9 @@ class RtcService {
         return false;
       }
 
-      // 连接到AIGC服务
-      final aigcConnectSuccess = await _aigcClient!.connect(
-        roomId: roomId,
-        userId: userId,
-        taskId: userId,
-        welcomeMessage: _config.welcomeMessage,
-      );
-
-      if (!aigcConnectSuccess) {
-        debugPrint('【RTC服务】连接AIGC服务失败');
-        await _engineManager.leaveRoom();
-        return false;
-      }
-
       // 更新状态
       _isInRoom = true;
       _setState(RtcState.inRoom);
-
-      // 发送系统消息
-      if (_messageCallback != null) {
-        final message = RtcAigcMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: MessageType.system,
-          content: '已加入房间: $roomId',
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        );
-        _messageCallback!(message);
-      }
 
       return true;
     } catch (e) {
@@ -416,16 +396,7 @@ class RtcService {
       _isInConversation = true;
       _setState(RtcState.inConversation);
 
-      // 发送通知消息
-      if (_messageCallback != null) {
-        final message = RtcAigcMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: MessageType.system,
-          content: '对话已开始，可以开始交谈',
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        );
-        _messageCallback!(message);
-      }
+      _aigcClient?.startVoiceChat();
 
       return true;
     } catch (e) {

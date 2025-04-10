@@ -14,8 +14,6 @@ library rtc_aigc_plugin;
 // 导出Web平台实现
 export 'rtc_aigc_plugin_web.dart';
 
-// 导出服务相关类
-export 'src/services/service_manager.dart';
 export 'src/services/service_interface.dart';
 
 // 导出客户端相关类
@@ -134,15 +132,18 @@ class RtcAigcPlugin {
 
   /// 用于监听字幕状态变化的流
   static Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _webImpl?.subtitleStateStream ?? const Stream<Map<String, dynamic>>.empty();
-      
+      _webImpl?.subtitleStateStream ??
+      const Stream<Map<String, dynamic>>.empty();
+
   /// 用于监听音频属性变化的流 (音量等)
   static Stream<Map<String, dynamic>> get audioPropertiesStream =>
-      _webImpl?.audioPropertiesStream ?? const Stream<Map<String, dynamic>>.empty();
-      
+      _webImpl?.audioPropertiesStream ??
+      const Stream<Map<String, dynamic>>.empty();
+
   /// 用于监听网络质量变化的流
   static Stream<Map<String, dynamic>> get networkQualityStream =>
-      _webImpl?.networkQualityStream ?? const Stream<Map<String, dynamic>>.empty();
+      _webImpl?.networkQualityStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// Factory constructor to enforce singleton instance of the plugin
   factory RtcAigcPlugin() => _instance;
@@ -168,9 +169,8 @@ class RtcAigcPlugin {
     required String roomId,
     required String userId,
     required String token,
-    String? taskId,
-    String? serverUrl,
-    String? apiBaseUrl,
+    required String taskId,
+    required String serverUrl,
     AsrConfig? asrConfig,
     TtsConfig? ttsConfig,
     LlmConfig? llmConfig,
@@ -196,9 +196,8 @@ class RtcAigcPlugin {
           'roomId': roomId,
           'userId': userId,
           'token': token,
-          if (taskId != null) 'taskId': taskId,
-          if (serverUrl != null) 'serverUrl': serverUrl,
-          if (apiBaseUrl != null) 'apiBaseUrl': apiBaseUrl,
+          'taskId': taskId,
+          'serverUrl': serverUrl,
           if (asrConfig != null) 'asrConfig': asrConfig.toMap(),
           if (ttsConfig != null) 'ttsConfig': ttsConfig.toMap(),
           if (llmConfig != null) 'llmConfig': llmConfig.toMap(),
@@ -212,9 +211,8 @@ class RtcAigcPlugin {
           'roomId': roomId,
           'userId': userId,
           'token': token,
-          if (taskId != null) 'taskId': taskId,
-          if (serverUrl != null) 'serverUrl': serverUrl,
-          if (apiBaseUrl != null) 'apiBaseUrl': apiBaseUrl,
+          'taskId': taskId,
+          'serverUrl': serverUrl,
           if (asrConfig != null) 'asrConfig': asrConfig.toMap(),
           if (ttsConfig != null) 'ttsConfig': ttsConfig.toMap(),
           if (llmConfig != null) 'llmConfig': llmConfig.toMap(),
@@ -233,24 +231,20 @@ class RtcAigcPlugin {
 
   /// Join an RTC room
   static Future<bool> joinRoom({
-    String? serverUrl,
     String? roomId,
     String? userId,
     String? token,
-    String? welcomeMessage,
   }) async {
     try {
       final Map<String, dynamic> args = {
-        if (serverUrl != null) 'serverUrl': serverUrl,
         if (roomId != null) 'roomId': roomId,
         if (userId != null) 'userId': userId,
         if (token != null) 'token': token,
-        if (welcomeMessage != null) 'welcomeMessage': welcomeMessage,
       };
 
       if (kIsWeb && _webImpl != null) {
-        final result = await _webImpl!
-            .handleMethodCall(MethodCall('joinRoom', args));
+        final result =
+            await _webImpl!.handleMethodCall(MethodCall('joinRoom', args));
         return result['success'] == true;
       } else {
         final result = await _channel.invokeMethod<bool>('joinRoom', args);

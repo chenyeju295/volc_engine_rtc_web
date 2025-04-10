@@ -291,10 +291,10 @@ class RtcConfig {
   final String userId;
 
   /// Token
-  final String? token;
+  final String token;
 
   /// Task ID
-  final String? taskId;
+  final String taskId;
 
   /// Server URL for HTTP API
   final String? serverUrl;
@@ -307,7 +307,7 @@ class RtcConfig {
 
   /// Welcome message
   final String? welcomeMessage;
-  
+
   /// Whether to process all messages, including non-AI messages
   final bool? processAllMessages;
 
@@ -316,11 +316,11 @@ class RtcConfig {
     required this.appId,
     required this.roomId,
     required this.userId,
-    this.token,
+    required this.token,
     required this.asrConfig,
     required this.ttsConfig,
     required this.llmConfig,
-    this.taskId,
+    required this.taskId,
     this.serverUrl,
     this.businessId,
     this.welcomeMessage = "你好，我是AI助手，有什么我可以帮您的吗？",
@@ -337,7 +337,7 @@ class RtcConfig {
       'asrConfig': asrConfig.toMap(),
       'ttsConfig': ttsConfig.toMap(),
       'llmConfig': llmConfig.toMap(),
-      if (taskId != null) 'taskId': taskId,
+      'taskId': taskId,
       if (serverUrl != null) 'serverUrl': serverUrl,
       if (businessId != null) 'businessId': businessId,
       if (welcomeMessage != null) 'welcomeMessage': welcomeMessage,

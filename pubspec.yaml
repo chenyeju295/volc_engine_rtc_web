@@ -25,3 +25,6 @@ flutter:
       web:
         pluginClass: RtcAigcPlugin
         fileName: rtc_aigc_plugin.dart
+
+  assets:
+    - sdk/volengine_Web_4.66.1.js
