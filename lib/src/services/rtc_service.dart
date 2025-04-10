@@ -55,6 +55,9 @@ class RtcService {
   /// 事件管理器
   final RtcEventManager _eventManager;
 
+  /// 公开获取事件管理器
+  RtcEventManager get eventManager => _eventManager;
+
   /// 消息处理器
   late final RtcMessageHandler _messageHandler;
 
@@ -693,10 +696,10 @@ class RtcService {
     try {
       if (!_checkInitialized()) return false;
 
-      if (!_isInRoom) {
-        debugPrint('【RTC服务】未在房间中，无法开始对话');
-        return false;
-      }
+      // if (!_isInRoom) {
+      //   debugPrint('【RTC服务】未在房间中，无法开始对话');
+      //   return false;
+      // }
 
       if (_isInConversation) {
         debugPrint('【RTC服务】已经在对话中');

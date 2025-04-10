@@ -80,6 +80,8 @@ class RtcEventManager {
       StreamController<String>.broadcast();
   final StreamController<String> _userLeaveController =
       StreamController<String>.broadcast();
+  final StreamController<String> _userStartAudioCaptureController =
+      StreamController<String>.broadcast();
   final StreamController<Map<String, dynamic>> _subtitleStateController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _audioPropertiesController =
@@ -137,6 +139,7 @@ class RtcEventManager {
   Stream<String> get subtitleStream => _subtitleController.stream;
   Stream<String> get userJoinStream => _userJoinController.stream;
   Stream<String> get userLeaveStream => _userLeaveController.stream;
+  Stream<String> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
   Stream<Map<String, dynamic>> get subtitleStateStream =>
       _subtitleStateController.stream;
   Stream<Map<String, dynamic>> get audioPropertiesStream =>
@@ -623,6 +626,9 @@ class RtcEventManager {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       debugPrint('事件: onUserStartAudioCapture ${userId}');
 
+      // 发送到专用流
+      _userStartAudioCaptureController.add(userId);
+
       // 更新音频状态
       // if (userId == config.userId) {
       //   _isAudioCapturing = true;
@@ -918,13 +924,11 @@ class RtcEventManager {
     }
   }
 
-  /// 销毁资源
+  /// 释放资源
   void dispose() {
-    // 注销所有事件
-    if (_rtcClient != null) {
-      debugPrint('正在注销所有事件...');
-      _eventHandlers.keys.toList().forEach(_unregisterEvent);
-    }
+    // 注销事件处理器
+    _eventHandlers.keys.toList().forEach(_unregisterEvent);
+    _eventHandlers.clear();
 
     // 关闭所有流控制器
     _stateController.close();
@@ -935,6 +939,7 @@ class RtcEventManager {
     _subtitleController.close();
     _userJoinController.close();
     _userLeaveController.close();
+    _userStartAudioCaptureController.close();
     _subtitleStateController.close();
     _audioPropertiesController.close();
     _networkQualityController.close();
@@ -947,9 +952,9 @@ class RtcEventManager {
     _localAudioPropertiesController.close();
     _remoteAudioPropertiesController.close();
     _trackEndedController.close();
+    _interruptController.close();
     _connectionStateChangedController.close();
     _binaryMessageReceivedController.close();
-    _interruptController.close();
 
     _engineSet = false;
     debugPrint('RtcEventManager 资源已释放');

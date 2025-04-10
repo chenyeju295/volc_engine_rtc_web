@@ -28,6 +28,16 @@ class RtcAigcPluginWeb {
   // 用于与Flutter通信的方法通道
   late MethodChannel _channel;
 
+  // 新增: 事件控制器
+  final StreamController<Map<String, dynamic>> _userJoinedController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userPublishStreamController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userStartAudioCaptureController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _playerEventController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+
   /// 用于监听字幕变化的流
   Stream<String> get subtitleStream =>
       _serviceManager?.rtcService.subtitleStream ??
@@ -92,6 +102,18 @@ class RtcAigcPluginWeb {
     return _serviceManager!.onNetworkQualityChanged;
   }
 
+  /// 新增: 用户加入事件流
+  Stream<Map<String, dynamic>> get userJoinedStream => _userJoinedController.stream;
+
+  /// 新增: 用户发布流事件流
+  Stream<Map<String, dynamic>> get userPublishStreamStream => _userPublishStreamController.stream;
+
+  /// 新增: 用户开始音频采集事件流
+  Stream<Map<String, dynamic>> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
+
+  /// 新增: 播放器事件流
+  Stream<Map<String, dynamic>> get playerEventStream => _playerEventController.stream;
+
   /// Web平台实现的注册方法
   ///
   /// 注册插件并设置方法通道处理器
@@ -106,9 +128,28 @@ class RtcAigcPluginWeb {
     // 创建插件实例并设置方法处理程序
     final pluginInstance = RtcAigcPluginWeb();
     pluginInstance._channel = channel;
-    channel.setMethodCallHandler(pluginInstance.handleMethodCall);
+    
+    // 使用Future.microtask确保在Flutter binding初始化后再设置handler
+    Future<void>.microtask(() {
+      channel.setMethodCallHandler(pluginInstance.handleMethodCall);
+    });
 
     debugPrint('RTC AIGC Plugin Web实现已注册');
+  }
+
+  /// 使用方法通道向Flutter端调用方法
+  void _invokeMethodOnChannel(String method, dynamic arguments) {
+    // 确保Flutter引擎已初始化后再调用方法
+    // 这里使用了一个简单的检查，防止在初始化前调用
+    if (_channel != null) {
+      try {
+        _channel.invokeMethod(method, arguments);
+      } catch (e) {
+        debugPrint('【Web Plugin】调用方法 $method 失败: $e');
+      }
+    } else {
+      debugPrint('【Web Plugin】无法调用方法 $method: 方法通道尚未初始化');
+    }
   }
 
   /// 处理来自Flutter的方法调用
@@ -233,12 +274,58 @@ class RtcAigcPluginWeb {
 
       // 初始化服务
       await _serviceManager!.initialize();
+      
+      // 注册事件监听器 - 新增
+      _setupEventListeners();
 
       return {'success': true};
     } catch (e, s) {
       debugPrint('RTC AIGC Plugin initialize error: $e $s');
       return {'success': false, 'error': e.toString()};
     }
+  }
+  
+  /// 设置事件监听器 - 新增
+  void _setupEventListeners() {
+    if (_serviceManager == null) return;
+    
+    // 监听用户加入事件
+    _serviceManager!.rtcService.userPublishStreamStream.listen((data) {
+      debugPrint('【Web Plugin】用户发布流事件: $data');
+      _userPublishStreamController.add(data);
+      
+      // 根据时序图，通知上层应用
+      _invokeMethodOnChannel('onUserPublishStream', data);
+    });
+    
+    // 监听用户开始音频采集事件 - 现在可以直接使用eventManager
+    _serviceManager!.rtcService.eventManager.userStartAudioCaptureStream.listen((userId) {
+      debugPrint('【Web Plugin】用户开始音频采集: $userId');
+      final data = {'userId': userId};
+      _userStartAudioCaptureController.add(data);
+      
+      // 根据时序图，通知上层应用
+      _invokeMethodOnChannel('onUserStartAudioCapture', data);
+    });
+    
+    // 监听播放器事件 - 现在可以直接使用eventManager
+    _serviceManager!.rtcService.eventManager.playerEventStream.listen((data) {
+      debugPrint('【Web Plugin】播放器事件: $data');
+      _playerEventController.add(data);
+      
+      // 根据时序图，通知上层应用
+      _invokeMethodOnChannel('onPlayerEvent', data);
+    });
+    
+    // 监听用户加入事件 - 现在可以直接使用eventManager
+    _serviceManager!.rtcService.eventManager.userJoinStream.listen((userId) {
+      debugPrint('【Web Plugin】用户加入: $userId');
+      final data = {'userId': userId};
+      _userJoinedController.add(data);
+      
+      // 根据时序图，通知上层应用
+      _invokeMethodOnChannel('onUserJoined', data);
+    });
   }
 
   /// 加入RTC房间
@@ -500,6 +587,12 @@ class RtcAigcPluginWeb {
 
       final deviceId = args?['deviceId'] as String?;
       final result = await _serviceManager!.startAudioCapture(deviceId);
+      
+      // 根据时序图，音频采集成功后自动发布流
+      if (result) {
+        debugPrint('【Web Plugin】音频采集已开始，准备发布流...');
+      }
+      
       return {'success': result};
     } catch (e) {
       debugPrint('RTC AIGC Plugin startAudioCapture error: $e');
@@ -532,6 +625,13 @@ class RtcAigcPluginWeb {
         await _serviceManager!.dispose();
         _serviceManager = null;
       }
+      
+      // 关闭事件流
+      _userJoinedController.close();
+      _userPublishStreamController.close();
+      _userStartAudioCaptureController.close();
+      _playerEventController.close();
+      
       return {'success': true};
     } catch (e) {
       debugPrint('RTC AIGC Plugin dispose error: $e');

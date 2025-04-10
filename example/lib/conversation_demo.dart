@@ -47,7 +47,10 @@ class _ConversationDemoState extends State<ConversationDemo> {
   @override
   void initState() {
     super.initState();
-    _setupEventListeners();
+    // 使用微任务确保widget完全挂载后再设置监听器
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupEventListeners();
+    });
   }
 
   @override

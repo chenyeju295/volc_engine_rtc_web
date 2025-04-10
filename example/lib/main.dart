@@ -6,6 +6,8 @@ import 'conversation_demo.dart'; // 导入会话演示页面
 import 'widgets/subtitle_view.dart' as local_widgets;
 
 void main() {
+  // 确保Flutter binding初始化
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -54,7 +56,10 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    // 使用微任务确保widget完全挂载后再初始化
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialize();
+    });
   }
 
   @override

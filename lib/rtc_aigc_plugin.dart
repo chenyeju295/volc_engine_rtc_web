@@ -33,6 +33,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:rtc_aigc_plugin/rtc_aigc_plugin_web.dart';
 import 'package:rtc_aigc_plugin/src/config/config.dart';
@@ -102,6 +103,12 @@ class RtcAigcPlugin {
   static void Function(bool isPlaying)? _onAudioStatusChange;
   static void Function(List<dynamic> audioDevices)? _onAudioDevicesChanged;
   static void Function(Map<String, dynamic> subtitle)? _onSubtitle;
+  
+  // 新增: 增加事件回调
+  static void Function(Map<String, dynamic> data)? _onUserJoined;
+  static void Function(Map<String, dynamic> data)? _onUserPublishStream;
+  static void Function(Map<String, dynamic> data)? _onUserStartAudioCapture;
+  static void Function(Map<String, dynamic> data)? _onPlayerEvent;
 
   /// 用于监听字幕变化的流
   static Stream<Object?> get subtitleStream =>
@@ -144,6 +151,22 @@ class RtcAigcPlugin {
   static Stream<Map<String, dynamic>> get networkQualityStream =>
       _webImpl?.networkQualityStream ??
       const Stream<Map<String, dynamic>>.empty();
+      
+  /// 新增: 用户加入事件流
+  static Stream<Map<String, dynamic>> get userJoinedStream =>
+      _webImpl?.userJoinedStream ?? const Stream<Map<String, dynamic>>.empty();
+      
+  /// 新增: 用户发布流事件流
+  static Stream<Map<String, dynamic>> get userPublishStreamStream =>
+      _webImpl?.userPublishStreamStream ?? const Stream<Map<String, dynamic>>.empty();
+      
+  /// 新增: 用户开始音频采集事件流
+  static Stream<Map<String, dynamic>> get userStartAudioCaptureStream =>
+      _webImpl?.userStartAudioCaptureStream ?? const Stream<Map<String, dynamic>>.empty();
+      
+  /// 新增: 播放器事件流
+  static Stream<Map<String, dynamic>> get playerEventStream =>
+      _webImpl?.playerEventStream ?? const Stream<Map<String, dynamic>>.empty();
 
   /// Factory constructor to enforce singleton instance of the plugin
   factory RtcAigcPlugin() => _instance;
@@ -156,11 +179,57 @@ class RtcAigcPlugin {
 
   /// Register this plugin
   static void registerWith(Registrar registrar) {
-    RtcAigcPluginWeb.registerWith(registrar);
-    if (kIsWeb) {
-      // 在Web平台使用Web实现
+    // 确保Flutter binding已初始化
+    // 使用scheduleMicrotask确保在主线程的当前事件循环结束后执行
+    Future<void>.microtask(() {
       _webImpl = RtcAigcPluginWeb();
-    }
+      RtcAigcPluginWeb.registerWith(registrar);
+      
+      // 设置方法通道处理器 - 新增
+      _setupMethodCallHandler();
+      
+      debugPrint('RTC AIGC Plugin 注册完成');
+    });
+  }
+  
+  /// 设置方法通道处理器 - 新增
+  static void _setupMethodCallHandler() {
+    _channel.setMethodCallHandler((call) async {
+      debugPrint('【RTC Plugin】收到方法调用: ${call.method}');
+      
+      switch (call.method) {
+        case 'onUserJoined':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onUserJoined != null) {
+            _onUserJoined!(data);
+          }
+          return;
+          
+        case 'onUserPublishStream':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onUserPublishStream != null) {
+            _onUserPublishStream!(data);
+          }
+          return;
+          
+        case 'onUserStartAudioCapture':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onUserStartAudioCapture != null) {
+            _onUserStartAudioCapture!(data);
+          }
+          return;
+          
+        case 'onPlayerEvent':
+          final data = Map<String, dynamic>.from(call.arguments);
+          if (_onPlayerEvent != null) {
+            _onPlayerEvent!(data);
+          }
+          return;
+          
+        default:
+          return;
+      }
+    });
   }
 
   /// Initialize the plugin
@@ -179,14 +248,28 @@ class RtcAigcPlugin {
     void Function(bool isPlaying)? onAudioStatusChange,
     void Function(List<dynamic> audioDevices)? onAudioDevicesChanged,
     void Function(Map<String, dynamic> subtitle)? onSubtitle,
+    // 新增事件回调
+    void Function(Map<String, dynamic> data)? onUserJoined,
+    void Function(Map<String, dynamic> data)? onUserPublishStream,
+    void Function(Map<String, dynamic> data)? onUserStartAudioCapture,
+    void Function(Map<String, dynamic> data)? onPlayerEvent,
   }) async {
     try {
+      // 确保Flutter binding已初始化
+      WidgetsFlutterBinding.ensureInitialized();
+      
       // Store callbacks
       _onStateChange = onStateChange;
       _onMessage = onMessage;
       _onAudioStatusChange = onAudioStatusChange;
       _onAudioDevicesChanged = onAudioDevicesChanged;
       _onSubtitle = onSubtitle;
+      
+      // 存储新增回调
+      _onUserJoined = onUserJoined;
+      _onUserPublishStream = onUserPublishStream;
+      _onUserStartAudioCapture = onUserStartAudioCapture;
+      _onPlayerEvent = onPlayerEvent;
 
       if (kIsWeb && _webImpl != null) {
         // 使用Web实现
@@ -221,7 +304,7 @@ class RtcAigcPlugin {
         return result ?? false;
       }
     } catch (e) {
-      print('Error initializing plugin: $e');
+      debugPrint('Error initializing plugin: $e');
       if (_onStateChange != null) {
         _onStateChange!('error', 'Failed to initialize plugin: $e');
       }
@@ -464,6 +547,43 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
+  
+  /// 新增: 开始音频采集
+  static Future<bool> startAudioCapture({String? deviceId}) async {
+    try {
+      if (kIsWeb && _webImpl != null) {
+        final result = await _webImpl!.handleMethodCall(
+            MethodCall('startAudioCapture', {'deviceId': deviceId}));
+        // 音频采集后自动发布流，根据时序图
+        debugPrint('【RTC Plugin】开始音频采集${result['success'] ? '成功' : '失败'}');
+        return result['success'] == true;
+      } else {
+        final result = await _channel.invokeMethod<bool>(
+            'startAudioCapture', {'deviceId': deviceId});
+        return result ?? false;
+      }
+    } catch (e) {
+      print('Error starting audio capture: $e');
+      return false;
+    }
+  }
+  
+  /// 新增: 停止音频采集
+  static Future<bool> stopAudioCapture() async {
+    try {
+      if (kIsWeb && _webImpl != null) {
+        final result = await _webImpl!.handleMethodCall(
+            MethodCall('stopAudioCapture'));
+        return result['success'] == true;
+      } else {
+        final result = await _channel.invokeMethod<bool>('stopAudioCapture');
+        return result ?? false;
+      }
+    } catch (e) {
+      print('Error stopping audio capture: $e');
+      return false;
+    }
+  }
 
   /// Dispose the plugin and release all resources
   static Future<bool> dispose() async {
@@ -476,6 +596,11 @@ class RtcAigcPlugin {
         _onAudioStatusChange = null;
         _onAudioDevicesChanged = null;
         _onSubtitle = null;
+        // 清除新增的回调
+        _onUserJoined = null;
+        _onUserPublishStream = null;
+        _onUserStartAudioCapture = null;
+        _onPlayerEvent = null;
         return result['success'] == true;
       } else {
         final result = await _channel.invokeMethod('dispose');
@@ -484,6 +609,11 @@ class RtcAigcPlugin {
         _onAudioStatusChange = null;
         _onAudioDevicesChanged = null;
         _onSubtitle = null;
+        // 清除新增的回调
+        _onUserJoined = null;
+        _onUserPublishStream = null;
+        _onUserStartAudioCapture = null;
+        _onPlayerEvent = null;
         return result;
       }
     } catch (e) {
@@ -524,6 +654,34 @@ class RtcAigcPlugin {
   static void handleSubtitle(Map<String, dynamic> subtitle) {
     if (_onSubtitle != null) {
       _onSubtitle!(subtitle);
+    }
+  }
+  
+  /// 新增: 用户加入房间事件处理
+  static void handleUserJoined(Map<String, dynamic> data) {
+    if (_onUserJoined != null) {
+      _onUserJoined!(data);
+    }
+  }
+  
+  /// 新增: 用户发布流事件处理
+  static void handleUserPublishStream(Map<String, dynamic> data) {
+    if (_onUserPublishStream != null) {
+      _onUserPublishStream!(data);
+    }
+  }
+  
+  /// 新增: 用户开始音频采集事件处理
+  static void handleUserStartAudioCapture(Map<String, dynamic> data) {
+    if (_onUserStartAudioCapture != null) {
+      _onUserStartAudioCapture!(data);
+    }
+  }
+  
+  /// 新增: 播放器事件处理
+  static void handlePlayerEvent(Map<String, dynamic> data) {
+    if (_onPlayerEvent != null) {
+      _onPlayerEvent!(data);
     }
   }
 
