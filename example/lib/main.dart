@@ -761,57 +761,62 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         ),
 
         // 音频设备控制
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('音频设备', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8.0),
-                const Text('输入设备:'),
-                DropdownButton<String>(
-                  value: _selectedAudioInputId,
-                  items: _audioInputDevices
-                      .map((device) => DropdownMenuItem(
-                            value: device['deviceId'],
-                            child: Text(device['label'] ?? ''),
-                          ))
-                      .toList(),
-                  onChanged: (value) async {
-                    if (value != null) {
-                      await RtcAigcPlugin.setAudioInputDevice(
-                          value);
-                      setState(() {
-                        _selectedAudioInputId = value;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 8.0),
-                const Text('输出设备:'),
-                DropdownButton<String>(
-                  value: _selectedAudioOutputId,
-                  items: _audioOutputDevices
-                      .map((device) => DropdownMenuItem(
-                            value: device['deviceId'],
-                            child: Text(device['label'] ?? ''),
-                          ))
-                      .toList(),
-                  onChanged: (value) async {
-                    if (value != null) {
-                      await RtcAigcPlugin.setAudioOutputDevice(
-                          value);
-                      setState(() {
-                        _selectedAudioOutputId = value;
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
+        // Card(
+        //   child: Padding(
+        //     padding: const EdgeInsets.all(8.0),
+        //     child: Column(
+        //       crossAxisAlignment: CrossAxisAlignment.stretch,
+        //       children: [
+        //         Text('音频设备', style: TextStyle(fontWeight: FontWeight.bold)),
+        //         const SizedBox(height: 8.0),
+        //         const Text('输入设备:'),
+        //         SizedBox(      width: 120,
+        //           child: DropdownButton<String>(
+        //             value: _selectedAudioInputId,
+        //             items: _audioInputDevices
+        //                 .map((device) => DropdownMenuItem(
+        //                       value: device['deviceId'],
+        //                       child: Text(device['label'] ?? ''),
+        //                     ))
+        //                 .toList(),
+        //             onChanged: (value) async {
+        //               if (value != null) {
+        //                 await RtcAigcPlugin.setAudioInputDevice(
+        //                     value);
+        //                 setState(() {
+        //                   _selectedAudioInputId = value;
+        //                 });
+        //               }
+        //             },
+        //           ),
+        //         ),
+        //         const SizedBox(height: 8.0),
+        //         const Text('输出设备:'),
+        //         SizedBox(
+        //           width: 120,
+        //           child: DropdownButton<String>(
+        //             value: _selectedAudioOutputId,
+        //             items: _audioOutputDevices
+        //                 .map((device) => DropdownMenuItem(
+        //                       value: device['deviceId'],
+        //                       child: Text(device['label'] ?? ''),
+        //                     ))
+        //                 .toList(),
+        //             onChanged: (value) async {
+        //               if (value != null) {
+        //                 await RtcAigcPlugin.setAudioOutputDevice(
+        //                     value);
+        //                 setState(() {
+        //                   _selectedAudioOutputId = value;
+        //                 });
+        //               }
+        //             },
+        //           ),
+        //         ),
+        //       ],
+        //     ),
+        //   ),
+        // ),
       ],
     );
   }
