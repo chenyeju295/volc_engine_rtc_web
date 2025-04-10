@@ -33,6 +33,12 @@ class RtcDeviceManager {
 
   RtcDeviceManager({required this.engineManager, dynamic config});
 
+  /// 直接设置RTC引擎实例，替代使用engineManager
+  void setEngine(dynamic rtcClient) {
+    engineManager = {'engine': rtcClient};
+    debugPrint('RtcDeviceManager: 直接设置引擎实例');
+  }
+
   /// 请求麦克风权限
   Future<bool> requestMicrophoneAccess() async {
     try {

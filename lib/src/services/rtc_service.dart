@@ -8,6 +8,8 @@ import 'package:rtc_aigc_plugin/src/services/rtc_engine_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_device_manager.dart';
 import 'package:rtc_aigc_plugin/src/client/aigc_client.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
+import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart' as utils;
 
 /// RTC消息回调
 typedef RtcMessageCallback = void Function(RtcAigcMessage message);
@@ -20,6 +22,21 @@ typedef RtcAudioStatusCallback = void Function(bool isPlaying);
 
 /// RTC设备状态回调
 typedef RtcDeviceStateCallback = void Function(bool isAvailable);
+
+/// RTC功能调用回调
+typedef RtcFunctionCallCallback = void Function(Map<String, dynamic> functionCall);
+
+/// RTC网络质量回调
+typedef RtcNetworkQualityCallback = void Function(Map<String, dynamic> quality);
+
+/// RTC自动播放失败回调
+typedef RtcAutoPlayFailedCallback = void Function(Map<String, dynamic> data);
+
+/// RTC音频属性回调
+typedef RtcAudioPropertiesCallback = void Function(Map<String, dynamic> properties);
+
+/// RTC用户发布流回调
+typedef RtcUserPublishStreamCallback = void Function(Map<String, dynamic> data);
 
 /// RTC服务 - 提供统一的接口用于RTC相关操作
 class RtcService {
@@ -35,6 +52,9 @@ class RtcService {
   /// 事件管理器
   final RtcEventManager _eventManager;
 
+  /// 消息处理器
+  late final RtcMessageHandler _messageHandler;
+
   /// AIGC客户端
   AigcClient? _aigcClient;
 
@@ -43,6 +63,30 @@ class RtcService {
 
   /// 消息回调
   RtcMessageCallback? _messageCallback;
+
+  /// 状态回调
+  RtcStateCallback? _stateCallback;
+
+  /// 音频状态回调
+  RtcAudioStatusCallback? _audioStatusCallback;
+
+  /// 设备状态回调
+  RtcDeviceStateCallback? _deviceStateCallback;
+
+  /// 功能调用回调
+  RtcFunctionCallCallback? _functionCallCallback;
+
+  /// 网络质量回调
+  RtcNetworkQualityCallback? _networkQualityCallback;
+
+  /// 自动播放失败回调
+  RtcAutoPlayFailedCallback? _autoPlayFailedCallback;
+
+  /// 音频属性回调
+  RtcAudioPropertiesCallback? _audioPropertiesCallback;
+
+  /// 用户发布流回调
+  RtcUserPublishStreamCallback? _userPublishStreamCallback;
 
   /// 状态流控制器
   final StreamController<RtcState> _stateController =
@@ -65,8 +109,8 @@ class RtcService {
       StreamController<String>.broadcast();
 
   /// 连接状态流控制器
-  final StreamController<ConnectionState> _connectionStateController =
-      StreamController<ConnectionState>.broadcast();
+  final StreamController<RtcConnectionState> _connectionStateController =
+      StreamController<RtcConnectionState>.broadcast();
 
   /// 设备状态流控制器
   final StreamController<bool> _deviceStateController =
@@ -75,6 +119,38 @@ class RtcService {
   /// 消息历史流控制器
   final StreamController<List<RtcAigcMessage>> _messageHistoryController =
       StreamController<List<RtcAigcMessage>>.broadcast();
+
+  /// 函数调用流控制器
+  final StreamController<Map<String, dynamic>> _functionCallController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 状态消息流控制器
+  final StreamController<Map<String, dynamic>> _stateMessageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 网络质量流控制器
+  final StreamController<Map<String, dynamic>> _networkQualityController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 自动播放失败流控制器
+  final StreamController<Map<String, dynamic>> _autoPlayFailedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 本地音频属性流控制器
+  final StreamController<Map<String, dynamic>> _localAudioPropertiesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 远程音频属性流控制器
+  final StreamController<Map<String, dynamic>> _remoteAudioPropertiesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 用户发布流控制器
+  final StreamController<Map<String, dynamic>> _userPublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 用户取消发布流控制器
+  final StreamController<Map<String, dynamic>> _userUnpublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   /// 消息历史
   final List<RtcAigcMessage> _messageHistory = [];
@@ -101,8 +177,55 @@ class RtcService {
         _engineManager = engineManager,
         _deviceManager = deviceManager,
         _eventManager = eventManager {
+    _messageHandler = RtcMessageHandler(config: config);
     _init();
   }
+
+  /// 获取状态流
+  Stream<RtcState> get stateStream => _stateController.stream;
+
+  /// 获取音频状态流
+  Stream<bool> get audioStatusStream => _audioStatusController.stream;
+
+  /// 获取字幕流
+  Stream<String> get subtitleStream => _subtitleController.stream;
+
+  /// 获取连接状态流
+  Stream<RtcConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
+
+  /// 获取设备状态流
+  Stream<bool> get deviceStateStream => _deviceStateController.stream;
+
+  /// 获取消息历史流
+  Stream<List<RtcAigcMessage>> get messageHistoryStream =>
+      _messageHistoryController.stream;
+
+  /// 获取函数调用流
+  Stream<Map<String, dynamic>> get functionCallStream =>
+      _functionCallController.stream;
+
+  /// 获取状态消息流
+  Stream<Map<String, dynamic>> get stateMessageStream =>
+      _stateMessageController.stream;
+
+  /// 获取网络质量流
+  Stream<Map<String, dynamic>> get networkQualityStream => _networkQualityController.stream;
+
+  /// 获取自动播放失败流
+  Stream<Map<String, dynamic>> get autoPlayFailedStream => _autoPlayFailedController.stream;
+
+  /// 获取本地音频属性流
+  Stream<Map<String, dynamic>> get localAudioPropertiesStream => _localAudioPropertiesController.stream;
+
+  /// 获取远程音频属性流
+  Stream<Map<String, dynamic>> get remoteAudioPropertiesStream => _remoteAudioPropertiesController.stream;
+
+  /// 获取用户发布流流
+  Stream<Map<String, dynamic>> get userPublishStreamStream => _userPublishStreamController.stream;
+
+  /// 获取用户取消发布流流
+  Stream<Map<String, dynamic>> get userUnpublishStreamStream => _userUnpublishStreamController.stream;
 
   /// 初始化
   Future<void> _init() async {
@@ -133,12 +256,6 @@ class RtcService {
 
   /// 注册事件监听器
   void _registerEventListeners() {
-    // 监听音频状态
-    _eventManager.audioStatusStream.listen((isCapturing) {
-      debugPrint('【RTC服务】音频采集状态变更: $isCapturing');
-      _audioStatusController.add(isCapturing);
-    });
-
     // 监听用户加入
     _eventManager.userJoinStream.listen((userId) {
       debugPrint('【RTC服务】用户加入: $userId');
@@ -168,8 +285,190 @@ class RtcService {
         _messageCallback!(message);
       }
     });
+    
+    // 监听字幕
+    _eventManager.subtitleStream.listen((subtitle) {
+      if (subtitle.isNotEmpty) {
+        debugPrint('【RTC服务】收到字幕: $subtitle');
+        _subtitleController.add(subtitle);
+      }
+    });
+    
+    // 监听函数调用
+    _eventManager.functionCallStream.listen((functionCall) {
+      debugPrint('【RTC服务】函数调用: ${functionCall['name']}');
+      
+      // 创建函数调用消息对象并添加到历史
+      final functionCallMessage = RtcAigcMessage.functionCall(
+        id: functionCall['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        name: functionCall['name'] ?? '',
+        arguments: functionCall['arguments'] ?? {},
+        isUser: false,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      
+      _addMessage(functionCallMessage);
+      
+      if (_functionCallCallback != null) {
+        _functionCallCallback!(functionCall);
+      }
+    });
+    
+    // 监听状态变化
+    _eventManager.stateStream.listen((stateData) {
+      final state = stateData['state'];
+      debugPrint('【RTC服务】AI状态变更: $state');
+      
+      // 更新状态
+      switch (state) {
+        case 'THINKING':
+          _setState(RtcState.waitingResponse);
+          break;
+        case 'SPEAKING':
+          _setState(RtcState.inConversation);
+          break;
+        case 'FINISHED':
+          _setState(RtcState.initialized);
+          break;
+        case 'INTERRUPTED':
+          _setState(RtcState.inRoom);
+          break;
+      }
+      
+      if (_stateCallback != null) {
+        _stateCallback!(_state);
+      }
+    });
+    
+    // 监听音频状态变化
+    _eventManager.audioCaptureStream.listen((isCapturing) {
+      debugPrint('【RTC服务】音频采集状态变更: $isCapturing');
+      _audioStatusController.add(isCapturing);
+      
+      if (_audioStatusCallback != null) {
+        _audioStatusCallback!(isCapturing);
+      }
+    });
+    
+    // 监听连接状态
+    _eventManager.connectionStream.listen((state) {
+      debugPrint('【RTC服务】连接状态变更: $state');
+      
+      RtcConnectionState connectionState;
+      switch (state.toLowerCase()) {
+        case 'connected':
+          connectionState = RtcConnectionState.connected;
+          break;
+        case 'connecting':
+          connectionState = RtcConnectionState.connecting;
+          break;
+        case 'disconnected':
+          connectionState = RtcConnectionState.disconnected;
+          break;
+        case 'failed':
+          connectionState = RtcConnectionState.failed;
+          break;
+        default:
+          connectionState = RtcConnectionState.unknown;
+      }
+      
+      _connectionStateController.add(connectionState);
+    });
+    
+    // 监听网络质量
+    _eventManager.networkQualityStream.listen((quality) {
+      debugPrint('【RTC服务】网络质量更新: ${quality['overallQuality']}');
+      
+      // 更新网络质量数据
+      _networkQualityController.add(quality);
+    });
+    
+    // 监听自动播放失败
+    _eventManager.autoPlayFailedStream.listen((data) {
+      debugPrint('【RTC服务】自动播放失败: ${data['userId']}');
+      
+      if (_messageCallback != null) {
+        final message = RtcAigcMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: MessageType.system,
+          content: '自动播放失败，请点击界面恢复音频',
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        );
+        _messageCallback!(message);
+      }
+      
+      _autoPlayFailedController.add(data);
+    });
+    
+    // 监听设备状态变化
+    _eventManager.audioDeviceStateChangedStream.listen((data) {
+      debugPrint('【RTC服务】音频设备状态变化');
+      _deviceStateController.add(true);
+    });
+    
+    // 监听本地音频属性
+    _eventManager.localAudioPropertiesStream.listen((data) {
+      _localAudioPropertiesController.add(data);
+    });
+    
+    // 监听远程音频属性
+    _eventManager.remoteAudioPropertiesStream.listen((data) {
+      _remoteAudioPropertiesController.add(data);
+    });
+    
+    // 监听用户发布流
+    _eventManager.userPublishStreamStream.listen((data) {
+      debugPrint('【RTC服务】用户发布流: ${data['userId']}');
+      _userPublishStreamController.add(data);
+    });
+    
+    // 监听用户取消发布流
+    _eventManager.userUnpublishStreamStream.listen((data) {
+      debugPrint('【RTC服务】用户取消发布流: ${data['userId']}');
+      _userUnpublishStreamController.add(data);
+    });
+    
+    // 监听错误
+    _eventManager.errorStream.listen((error) {
+      debugPrint('【RTC服务】发生错误: ${error.code} - ${error.message}');
+      
+      if (_messageCallback != null) {
+        final message = RtcAigcMessage.error(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: 'RTC错误: ${error.code} - ${error.message}',
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        );
+        _messageCallback!(message);
+      }
+      
+      if (error.isFatal) {
+        _setState(RtcState.error);
+      }
+    });
 
-    // 监听AIGC客户端消息
+    // 监听中断事件
+    _eventManager.interruptStream.listen((_) {
+      debugPrint('【RTC服务】检测到会话中断');
+      
+      // 发送中断消息
+      if (_messageCallback != null) {
+        final message = RtcAigcMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: MessageType.system,
+          content: '会话已被中断',
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+          isInterrupted: true,
+        );
+        _messageCallback!(message);
+      }
+      
+      // 如果当前正在等待响应，则更新状态
+      if (_state == RtcState.waitingResponse) {
+        _setState(RtcState.inConversation);
+      }
+    });
+
+    // AIGC客户端消息监听
     if (_aigcClient != null) {
       _aigcClient!.messageStream.listen((message) {
         debugPrint('【RTC服务】收到AIGC消息: ${message.content}');
@@ -203,35 +502,7 @@ class RtcService {
         }
       });
     }
-
-    // 监听字幕
-    _eventManager.subtitleStream.listen((subtitle) {
-      if (subtitle.isNotEmpty) {
-        debugPrint('【RTC服务】收到字幕: $subtitle');
-      }
-      _subtitleController.add(subtitle);
-    });
   }
-
-  /// 获取状态流
-  Stream<RtcState> get stateStream => _stateController.stream;
-
-  /// 获取音频状态流
-  Stream<bool> get audioStatusStream => _audioStatusController.stream;
-
-  /// 获取字幕流
-  Stream<String> get subtitleStream => _subtitleController.stream;
-
-  /// 获取连接状态流
-  Stream<ConnectionState> get connectionStateStream =>
-      _connectionStateController.stream;
-
-  /// 获取设备状态流
-  Stream<bool> get deviceStateStream => _deviceStateController.stream;
-
-  /// 获取消息历史流
-  Stream<List<RtcAigcMessage>> get messageHistoryStream =>
-      _messageHistoryController.stream;
 
   /// 更新状态
   void _setState(RtcState newState) {
@@ -266,6 +537,46 @@ class RtcService {
   /// 设置消息回调
   void setMessageCallback(RtcMessageCallback callback) {
     _messageCallback = callback;
+  }
+
+  /// 设置状态回调
+  void setStateCallback(RtcStateCallback callback) {
+    _stateCallback = callback;
+  }
+
+  /// 设置音频状态回调
+  void setAudioStatusCallback(RtcAudioStatusCallback callback) {
+    _audioStatusCallback = callback;
+  }
+
+  /// 设置设备状态回调
+  void setDeviceStateCallback(RtcDeviceStateCallback callback) {
+    _deviceStateCallback = callback;
+  }
+
+  /// 设置功能调用回调
+  void setFunctionCallCallback(RtcFunctionCallCallback callback) {
+    _functionCallCallback = callback;
+  }
+
+  /// 设置网络质量回调
+  void setNetworkQualityCallback(RtcNetworkQualityCallback callback) {
+    _networkQualityCallback = callback;
+  }
+
+  /// 设置自动播放失败回调
+  void setAutoPlayFailedCallback(RtcAutoPlayFailedCallback callback) {
+    _autoPlayFailedCallback = callback;
+  }
+
+  /// 设置音频属性回调
+  void setAudioPropertiesCallback(RtcAudioPropertiesCallback callback) {
+    _audioPropertiesCallback = callback;
+  }
+
+  /// 设置用户发布流回调
+  void setUserPublishStreamCallback(RtcUserPublishStreamCallback callback) {
+    _userPublishStreamCallback = callback;
   }
 
   /// 初始化服务
@@ -747,6 +1058,14 @@ class RtcService {
       _connectionStateController.close();
       _deviceStateController.close();
       _messageHistoryController.close();
+      _functionCallController.close();
+      _stateMessageController.close();
+      _networkQualityController.close();
+      _autoPlayFailedController.close();
+      _localAudioPropertiesController.close();
+      _remoteAudioPropertiesController.close();
+      _userPublishStreamController.close();
+      _userUnpublishStreamController.close();
 
       _isDisposed = true;
       _isInitialized = false;
@@ -755,4 +1074,62 @@ class RtcService {
       debugPrint('【RTC服务】销毁时发生错误: $e');
     }
   }
+
+  /// 初始化引擎
+  Future<bool> initializeEngine() async {
+    if (_isDisposed) {
+      return false;
+    }
+
+    try {
+      debugPrint('【RTC服务】初始化RTC引擎');
+      
+      // 初始化引擎
+      final success = await _engineManager.initialize();
+      if (!success) {
+        debugPrint('【RTC服务】引擎初始化失败');
+        return false;
+      }
+      
+      // 获取RTC客户端实例
+      final rtcClient = _engineManager.getRtcClient();
+      if (rtcClient == null) {
+        debugPrint('【RTC服务】无法获取RTC客户端实例');
+        return false;
+      }
+
+      // 设置消息处理器的引擎
+      _messageHandler.setEngine(rtcClient);
+      
+      // 设置事件管理器的引擎
+      _eventManager.setEngine(rtcClient);
+      
+      // 设置设备管理器的引擎
+      _deviceManager.setEngine(rtcClient);
+      
+      debugPrint('【RTC服务】引擎初始化成功');
+      return true;
+    } catch (e) {
+      debugPrint('【RTC服务】初始化引擎失败: $e');
+      return false;
+    }
+  }
+}
+
+/// 添加一个枚举类定义RTC连接状态
+enum RtcConnectionState {
+  /// 已断开连接
+  disconnected,
+
+  /// 正在连接中
+  connecting,
+
+  /// 已连接
+  connected,
+
+  /// 连接失败
+  failed,
+  
+  /// 未知状态
+  unknown
 }

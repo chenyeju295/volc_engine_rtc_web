@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:js_util' as js_util;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 /// Message type constants matching web implementation
-class MessageType {
+class RtcMessageType {
   static const String BRIEF = 'conv';
   static const String SUBTITLE = 'subv';
   static const String FUNCTION_CALL = 'func';
@@ -35,209 +35,186 @@ class InterruptPriority {
   static const int LOW = 3;
 }
 
-/// Utility class for handling RTC AIGC messages
-class RtcAigcMessageUtils {
-  /// Message type codes
-  static const Map<String, int> MESSAGE_TYPE_CODE = {
-    MessageType.SUBTITLE: 1,
-    MessageType.FUNCTION_CALL: 2,
-    MessageType.BRIEF: 3,
-  };
-
-  /// Format a message for UI display
-  static Map<String, dynamic> formatMessageForUI(Map<String, dynamic> message) {
-    if (message.isEmpty) {
-      return {'type': 'unknown', 'text': '', 'timestamp': DateTime.now().millisecondsSinceEpoch};
-    }
-
-    // Handle different message types
-    if (message['type'] == 'task_started') {
-      return {
-        'type': 'system',
-        'text': '对话已开始',
-        'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-        'taskId': message['taskId'],
-        'isFinal': true,
-        'isUser': false,
-        'userId': 'system',
-      };
-    } else if (message['type'] == 'task_stopped') {
-      return {
-        'type': 'system',
-        'text': '对话已结束',
-        'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-        'taskId': message['taskId'],
-        'isFinal': true,
-        'isUser': false,
-        'userId': 'system',
-      };
-    } else if (message['state'] != null) {
-      // Handle state messages
-      final state = message['state'];
-      final stateText = state == 'THINKING' 
-          ? '思考中...' 
-          : (state == 'SPEAKING' 
-              ? '说话中...' 
-              : (state == 'FINISHED' ? '已完成' : ''));
-      
-      return {
-        'type': 'state',
-        'text': stateText,
-        'state': state,
-        'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-        'isThinking': message['isThinking'] ?? false,
-        'isTalking': message['isTalking'] ?? false,
-        'isFinal': true,
-        'isUser': false,
-        'userId': 'system',
-      };
-    } else if (message['text'] != null) {
-      // Handle subtitle/text messages
-      final isUser = message['userId'] != 'BotName001' && 
-                    message['userId'] != 'RobotMan_' &&
-                    !message['userId'].toString().contains('bot');
-      
-      return {
-        'type': MessageType.SUBTITLE,
-        'text': message['text'] ?? '',
-        'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-        'isFinal': message['isFinal'] ?? message['definite'] ?? true,
-        'isUser': isUser,
-        'userId': message['userId'] ?? (isUser ? 'user' : 'bot'),
-        'language': message['language'] ?? 'zh',
-      };
-    }
-
-    // Default unknown format
-    return {
-      'type': 'unknown',
-      'text': jsonEncode(message),
-      'timestamp': message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
-      'isFinal': true,
-      'isUser': false,
-      'userId': 'system',
-    };
-  }
+/// RTC消息工具类 - 处理TLV格式的消息和其他消息处理功能
+class RtcMessageUtils {
+  /// 魔术数字 - 'subv'
+  static const int MAGIC_NUMBER = 0x73756276;
   
-  /// Extract conversation history from message list
-  static List<Map<String, dynamic>> extractConversationHistory(
-      List<Map<String, dynamic>> messages) {
-    final result = <Map<String, dynamic>>[];
-
-    for (final message in messages) {
-      // Format message for UI
-      final formatted = formatMessageForUI(message);
-
-      // Filter out non-subtitle or empty text messages
-      if (formatted['type'] == MessageType.SUBTITLE &&
-          formatted['text'].toString().isNotEmpty) {
-        result.add({
-          'userId': formatted['userId'],
-          'text': formatted['text'],
-          'timestamp': formatted['timestamp'],
-          'isFinal': formatted['isFinal'],
-          'isUser': formatted['isUser'],
-        });
-      }
-    }
-
-    return result;
-  }
+  /// 消息类型常量
+  static const String TYPE_SUBTITLE = 'subtitle';
+  static const String TYPE_STATE = 'state';
+  static const String TYPE_FUNCTION_CALL = 'function_call';
+  static const String TYPE_FUNCTION_RESULT = 'function_result';
   
-  /// Parse TLV message
-  /// TLV format: | type (4 bytes) | length (4 bytes) | value |
-  static Map<String, dynamic>? parseTlvMessage(ByteBuffer buffer) {
-    if (buffer == null || buffer.lengthInBytes < 8) {
-      debugPrint('【TLV解析】消息无效或长度不足');
-      return null;
-    }
-
+  /// 解析TLV格式的消息
+  /// 
+  /// 格式: 
+  /// - 4字节魔术数字 'subv'
+  /// - 4字节内容长度
+  /// - N字节JSON内容
+  static Map<String, dynamic>? parseTlvMessage(Uint8List bytes) {
     try {
-      // Read type (first 4 bytes)
-      final typeBytes = Uint8List.view(buffer, 0, 4);
-      String type = '';
-      for (var i = 0; i < 4; i++) {
-        if (typeBytes[i] == 0) break; // Stop at null terminator
-        type += String.fromCharCode(typeBytes[i]);
-      }
-
-      // Read length (next 4 bytes, big-endian)
-      final lengthBytes = Uint8List.view(buffer, 4, 4);
-      final length = (lengthBytes[0] << 24) |
-          (lengthBytes[1] << 16) |
-          (lengthBytes[2] << 8) |
-          lengthBytes[3];
-
-      // Verify message length
-      if (buffer.lengthInBytes < 8 + length) {
-        debugPrint(
-            '【TLV解析】消息内容长度不足，期望${length}字节，实际${buffer.lengthInBytes - 8}字节');
+      // 检查长度
+      if (bytes.length < 8) {
         return null;
       }
-
-      // Read and decode value
-      final valueBytes = Uint8List.view(buffer, 8, length);
-      final utf8Decoder = const Utf8Decoder();
-      final value = utf8Decoder.convert(valueBytes);
-
-      debugPrint('【TLV解析】类型: $type, 长度: $length');
       
-      // Try to parse as JSON
-      try {
-        final jsonData = jsonDecode(value);
-        return {'type': type, 'data': jsonData};
-      } catch (e) {
-        debugPrint('【TLV解析】JSON解析失败，以文本形式返回: $e');
-        return {'type': type, 'data': value};
+      // 检查魔术数字 "subv"
+      final int magic = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+      if (magic != MAGIC_NUMBER) {
+        return null;
       }
+      
+      // 获取内容长度
+      final int length = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+      if (bytes.length - 8 < length) {
+        debugPrint('RtcMessageUtils: TLV长度不匹配');
+        return null;
+      }
+      
+      // 提取内容
+      final String content = utf8.decode(bytes.sublist(8, 8 + length));
+      
+      // 尝试解析JSON内容
+      return safeParseJson(content);
     } catch (e) {
-      debugPrint('【TLV解析】解析TLV消息失败: $e');
+      debugPrint('RtcMessageUtils: 解析TLV消息出错: $e');
       return null;
     }
   }
-
-  /// Create TLV data from string content and type
-  static ByteBuffer string2tlv(String content, String type) {
+  
+  /// 创建TLV格式的消息
+  static dynamic createTlvMessage(Map<String, dynamic> data) {
     try {
-      // Validate type is 4 characters or less
-      if (type.length > 4) {
-        type = type.substring(0, 4);
-      } else if (type.length < 4) {
-        // Pad with nulls
-        type = type.padRight(4, '\u0000');
+      // 转换为JSON字符串
+      final String jsonStr = jsonEncode(data);
+      
+      // 获取UTF8编码的字节
+      final Uint8List contentBytes = utf8.encode(jsonStr);
+      final int contentLength = contentBytes.length;
+      
+      // 创建结果缓冲区 (8字节头部 + 内容长度)
+      final Uint8List result = Uint8List(8 + contentLength);
+      
+      // 写入魔术数字 'subv'
+      result[0] = (MAGIC_NUMBER >> 24) & 0xFF;
+      result[1] = (MAGIC_NUMBER >> 16) & 0xFF;
+      result[2] = (MAGIC_NUMBER >> 8) & 0xFF;
+      result[3] = MAGIC_NUMBER & 0xFF;
+      
+      // 写入内容长度
+      result[4] = (contentLength >> 24) & 0xFF;
+      result[5] = (contentLength >> 16) & 0xFF;
+      result[6] = (contentLength >> 8) & 0xFF;
+      result[7] = contentLength & 0xFF;
+      
+      // 写入内容
+      for (int i = 0; i < contentLength; i++) {
+        result[8 + i] = contentBytes[i];
       }
       
-      // Convert content to UTF-8 bytes
-      final contentBytes = Uint8List.fromList(utf8.encode(content));
-      final contentLength = contentBytes.length;
-      
-      // Create type bytes (4 bytes)
-      final typeBytes = Uint8List(4);
-      for (var i = 0; i < 4; i++) {
-        if (i < type.length) {
-          typeBytes[i] = type.codeUnitAt(i);
-        } else {
-          typeBytes[i] = 0; // null padding
-        }
-      }
-      
-      // Create length bytes (4 bytes, big-endian)
-      final lengthBytes = Uint8List(4);
-      lengthBytes[0] = (contentLength >> 24) & 0xFF;
-      lengthBytes[1] = (contentLength >> 16) & 0xFF;
-      lengthBytes[2] = (contentLength >> 8) & 0xFF;
-      lengthBytes[3] = contentLength & 0xFF;
-      
-      // Combine all parts
-      final resultBytes = Uint8List(4 + 4 + contentLength);
-      resultBytes.setRange(0, 4, typeBytes);
-      resultBytes.setRange(4, 8, lengthBytes);
-      resultBytes.setRange(8, 8 + contentLength, contentBytes);
-      
-      return resultBytes.buffer;
+      // 转换为ArrayBuffer (Web平台)
+      return _uint8ListToArrayBuffer(result);
     } catch (e) {
-      debugPrint('【TLV创建】创建TLV数据失败: $e');
-      throw Exception('Failed to create TLV data: $e');
+      debugPrint('RtcMessageUtils: 创建TLV消息出错: $e');
+      return null;
+    }
+  }
+  
+  /// 创建字幕消息
+  static dynamic createSubtitleMessage(String text, {bool isFinal = true}) {
+    final Map<String, dynamic> data = {
+      'type': TYPE_SUBTITLE,
+      'text': text,
+      'isFinal': isFinal,
+      'timestamp': DateTime.now().millisecondsSinceEpoch
+    };
+    
+    return createTlvMessage(data);
+  }
+  
+  /// 创建状态消息
+  static dynamic createStateMessage(String state) {
+    final Map<String, dynamic> data = {
+      'type': TYPE_STATE,
+      'state': state,
+      'timestamp': DateTime.now().millisecondsSinceEpoch
+    };
+    
+    return createTlvMessage(data);
+  }
+  
+  /// 创建函数调用消息
+  static dynamic createFunctionCallMessage(String name, Map<String, dynamic> args) {
+    final Map<String, dynamic> data = {
+      'type': TYPE_FUNCTION_CALL,
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'name': name,
+      'arguments': args,
+      'timestamp': DateTime.now().millisecondsSinceEpoch
+    };
+    
+    return createTlvMessage(data);
+  }
+  
+  /// 创建函数调用结果消息
+  static dynamic createFunctionResultMessage(String name, Map<String, dynamic> result) {
+    final Map<String, dynamic> data = {
+      'type': TYPE_FUNCTION_RESULT,
+      'name': name,
+      'result': result,
+      'timestamp': DateTime.now().millisecondsSinceEpoch
+    };
+    
+    return createTlvMessage(data);
+  }
+  
+  /// 安全解析JSON
+  static Map<String, dynamic>? safeParseJson(String text) {
+    if (text.isEmpty) return null;
+    
+    try {
+      final dynamic result = jsonDecode(text);
+      if (result is Map<String, dynamic>) {
+        return result;
+      }
+    } catch (e) {
+      debugPrint('RtcMessageUtils: 解析JSON出错: $e');
+    }
+    
+    return null;
+  }
+  
+  /// Uint8List转ArrayBuffer (Web平台)
+  static dynamic _uint8ListToArrayBuffer(Uint8List bytes) {
+    try {
+      // 创建ArrayBuffer
+      final buffer = js_util.callConstructor(
+          js_util.getProperty(js_util.globalThis, 'ArrayBuffer'), [bytes.length]);
+      
+      // 创建Uint8Array视图
+      final uint8Array = js_util.callConstructor(
+          js_util.getProperty(js_util.globalThis, 'Uint8Array'), [buffer]);
+      
+      // 复制数据
+      for (int i = 0; i < bytes.length; i++) {
+        js_util.setProperty(uint8Array, i, bytes[i]);
+      }
+      
+      return buffer;
+    } catch (e) {
+      debugPrint('RtcMessageUtils: 转换Uint8List到ArrayBuffer出错: $e');
+      
+      // 如果转换失败，尝试使用TextEncoder
+      try {
+        final encoder = js_util.callConstructor(
+            js_util.getProperty(js_util.globalThis, 'TextEncoder'), []);
+        
+        return js_util.callMethod(encoder, 'encode', [utf8.decode(bytes)]);
+      } catch (e2) {
+        debugPrint('RtcMessageUtils: 备用转换也失败: $e2');
+        return null;
+      }
     }
   }
 } 

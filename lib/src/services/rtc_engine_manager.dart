@@ -17,6 +17,11 @@ class RtcEngineManager {
 
   RtcEngineManager({required this.config});
 
+  /// Returns the RTC client instance
+  dynamic getRtcClient() {
+    return engine;
+  }
+
   Future<bool> initialize() async {
     try {
       debugPrint('【RTC引擎】开始初始化RTC引擎...');
@@ -380,11 +385,6 @@ class RtcEngineManager {
 
     // 确保事件监听器在初始化引擎后、加入房间前添加
     debugPrint('【RTC引擎】已成功将引擎实例传递给事件管理器');
-  }
-
-  /// 获取引擎实例 - 供其他组件使用
-  dynamic getEngine() {
-    return engine;
   }
 
   /// 恢复音频播放（解决浏览器自动播放限制问题）

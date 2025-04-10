@@ -107,6 +107,9 @@ enum RtcState {
 
   /// 等待AI响应中
   waitingResponse,
+  
+  /// 发生错误
+  error,
 
   /// 已销毁
   disposed

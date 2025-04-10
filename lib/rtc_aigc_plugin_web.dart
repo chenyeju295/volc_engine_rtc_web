@@ -15,6 +15,7 @@ import 'package:rtc_aigc_plugin/src/services/service_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/service_interface.dart';
 import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_service.dart';
 
 /// RTC AIGC Plugin for Web - Web平台专用实现
 ///
@@ -42,9 +43,9 @@ class RtcAigcPluginWeb {
       const Stream<bool>.empty();
 
   /// 用于监听连接状态变化的流 (connected, disconnected, autoplay_failed等)
-  Stream<ConnectionState> get connectionStateStream =>
+  Stream<RtcConnectionState> get connectionStateStream =>
       _serviceManager?.rtcService.connectionStateStream ??
-      const Stream<ConnectionState>.empty();
+      const Stream<RtcConnectionState>.empty();
 
   /// 用于监听设备变化的流
   Stream<bool> get deviceStateStream =>
