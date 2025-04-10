@@ -122,7 +122,7 @@ class ServiceManager implements Service {
     _engineManager = RtcEngineManager(config: config);
     _deviceManager =
         RtcDeviceManager(config: config, engineManager: _engineManager);
-    _eventManager = RtcEventManager(config: config);
+    _eventManager = RtcEventManager();
     _rtcService = RtcService(
       config: config,
       engineManager: _engineManager,

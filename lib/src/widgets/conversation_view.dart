@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 enum MessageSource {
   /// 用户消息
   user,
-  
+
   /// AI消息
   ai,
-  
+
   /// 系统消息
   system
 }
@@ -17,38 +17,38 @@ enum MessageSource {
 class ConversationView extends StatefulWidget {
   /// 消息历史流
   final Stream<Map<String, dynamic>> messageHistoryStream;
-  
+
   /// AI状态流
   final Stream<Map<String, dynamic>> stateStream;
-  
+
   /// 用户ID
   final String userId;
-  
+
   /// AI ID
   final String botId;
-  
+
   /// 打断回调
   final VoidCallback? onInterrupt;
-  
+
   /// 是否显示打断按钮
   final bool showInterruptButton;
-  
+
   /// 气泡颜色配置
   final Map<MessageSource, Color> bubbleColors;
-  
+
   /// 文本颜色配置
   final Map<MessageSource, Color> textColors;
-  
+
   /// 显示状态指示器
   final bool showStatusIndicator;
-  
+
   /// 创建一个会话视图
   const ConversationView({
     Key? key,
     required this.messageHistoryStream,
     required this.stateStream,
     required this.userId,
-    this.botId = 'BotName001',
+    this.botId = 'user1',
     this.onInterrupt,
     this.showInterruptButton = true,
     this.bubbleColors = const {
@@ -71,21 +71,21 @@ class ConversationView extends StatefulWidget {
 class _ConversationViewState extends State<ConversationView> {
   /// 消息历史
   final List<Map<String, dynamic>> _messages = [];
-  
+
   /// 消息流订阅
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
-  
+
   /// 状态流订阅
   StreamSubscription<Map<String, dynamic>>? _stateSubscription;
-  
+
   /// 滚动控制器
   final ScrollController _scrollController = ScrollController();
-  
+
   /// AI状态
   bool _isAIThinking = false;
   bool _isAITalking = false;
   String _aiState = '';
-  
+
   /// AI是否已准备好
   bool _isAIReady = false;
 
@@ -94,7 +94,7 @@ class _ConversationViewState extends State<ConversationView> {
     super.initState();
     _subscribeToStreams();
   }
-  
+
   @override
   void didUpdateWidget(ConversationView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -104,51 +104,53 @@ class _ConversationViewState extends State<ConversationView> {
       _subscribeToStreams();
     }
   }
-  
+
   @override
   void dispose() {
     _unsubscribe();
     _scrollController.dispose();
     super.dispose();
   }
-  
+
   /// 订阅消息和状态流
   void _subscribeToStreams() {
-    _messageSubscription = widget.messageHistoryStream.listen(_handleNewMessage);
+    _messageSubscription =
+        widget.messageHistoryStream.listen(_handleNewMessage);
     _stateSubscription = widget.stateStream.listen(_handleStateChange);
   }
-  
+
   /// 取消订阅
   void _unsubscribe() {
     _messageSubscription?.cancel();
     _stateSubscription?.cancel();
   }
-  
+
   /// 处理新消息
   void _handleNewMessage(Map<String, dynamic> message) {
     _isAIReady = true;
     final userId = message['userId'] as String? ?? '';
     final text = message['text'] as String? ?? '';
     final isFinal = message['isFinal'] as bool? ?? false;
-    
+
     // 确定是更新还是添加
     bool shouldAdd = true;
-    
+
     // 如果历史有消息，检查是否需要更新
     if (_messages.isNotEmpty) {
       final lastMsg = _messages.last;
-      
+
       // 如果是相同发送者的未完成消息，则更新
       if (lastMsg['userId'] == userId && lastMsg['isFinal'] == false) {
         shouldAdd = false;
         setState(() {
           lastMsg['text'] = text;
           lastMsg['isFinal'] = isFinal;
-          lastMsg['timestamp'] = message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
+          lastMsg['timestamp'] =
+              message['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
         });
       }
     }
-    
+
     // 添加新消息
     if (shouldAdd) {
       setState(() {
@@ -158,7 +160,7 @@ class _ConversationViewState extends State<ConversationView> {
         });
       });
     }
-    
+
     // 滚动到底部
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -170,21 +172,21 @@ class _ConversationViewState extends State<ConversationView> {
       }
     });
   }
-  
+
   /// 处理状态变化
   void _handleStateChange(Map<String, dynamic> state) {
     final stateCode = state['state'] as String? ?? '';
-    
+
     setState(() {
       _aiState = stateCode;
       _isAIThinking = state['isThinking'] as bool? ?? false;
       _isAITalking = state['isTalking'] as bool? ?? false;
-      
+
       // 如果是打断状态，标记最后一条AI消息为已打断
       if (stateCode == 'INTERRUPTED' && _messages.isNotEmpty) {
         // 查找最后一条AI消息
         for (int i = _messages.length - 1; i >= 0; i--) {
-          if (_messages[i]['userId'] == widget.botId) {
+          if (_messages[i]['userId'] == widget.userId) {
             _messages[i]['isInterrupted'] = true;
             break;
           }
@@ -192,15 +194,14 @@ class _ConversationViewState extends State<ConversationView> {
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         // 状态指示器
-        if (widget.showStatusIndicator)
-          _buildStatusIndicator(),
-          
+        if (widget.showStatusIndicator) _buildStatusIndicator(),
+
         // 消息列表
         Expanded(
           child: _isAIReady ? _buildMessageList() : _buildLoadingIndicator(),
@@ -208,7 +209,7 @@ class _ConversationViewState extends State<ConversationView> {
       ],
     );
   }
-  
+
   /// 构建加载提示
   Widget _buildLoadingIndicator() {
     return Center(
@@ -216,7 +217,7 @@ class _ConversationViewState extends State<ConversationView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(
-            width: 24, 
+            width: 24,
             height: 24,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
@@ -232,7 +233,7 @@ class _ConversationViewState extends State<ConversationView> {
       ),
     );
   }
-  
+
   /// 构建消息列表
   Widget _buildMessageList() {
     return Stack(
@@ -240,24 +241,30 @@ class _ConversationViewState extends State<ConversationView> {
         // 消息列表
         ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0), // 底部留出打断按钮的空间
+          padding:
+              const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 80.0), // 底部留出打断按钮的空间
           itemCount: _messages.length,
           itemBuilder: (context, index) {
             final message = _messages[index];
             final userId = message['userId'] as String? ?? '';
             final isUser = userId == widget.userId;
             final isAI = userId == widget.botId;
-            
+
             // 确定消息源
-            final source = isUser ? MessageSource.user : 
-                          isAI ? MessageSource.ai : MessageSource.system;
-            
+            final source = isUser
+                ? MessageSource.user
+                : isAI
+                    ? MessageSource.ai
+                    : MessageSource.system;
+
             return _buildMessageBubble(message, source);
           },
         ),
-        
+
         // 打断按钮
-        if (widget.showInterruptButton && widget.onInterrupt != null && (_isAIThinking || _isAITalking))
+        if (widget.showInterruptButton &&
+            widget.onInterrupt != null &&
+            (_isAIThinking || _isAITalking))
           Positioned(
             bottom: 16,
             left: 0,
@@ -270,7 +277,8 @@ class _ConversationViewState extends State<ConversationView> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red[400],
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
@@ -278,11 +286,11 @@ class _ConversationViewState extends State<ConversationView> {
       ],
     );
   }
-  
+
   /// 构建状态指示器
   Widget _buildStatusIndicator() {
     String statusText = '';
-    
+
     if (_isAIThinking) {
       statusText = 'AI正在思考...';
     } else if (_isAITalking) {
@@ -292,11 +300,11 @@ class _ConversationViewState extends State<ConversationView> {
     } else if (_aiState == 'INTERRUPTED') {
       statusText = 'AI被打断';
     }
-    
+
     if (statusText.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       color: Colors.grey[200],
@@ -325,13 +333,14 @@ class _ConversationViewState extends State<ConversationView> {
       ),
     );
   }
-  
+
   /// 构建消息气泡
-  Widget _buildMessageBubble(Map<String, dynamic> message, MessageSource source) {
+  Widget _buildMessageBubble(
+      Map<String, dynamic> message, MessageSource source) {
     final text = message['text'] as String? ?? '';
     final isFinal = message['isFinal'] as bool? ?? false;
     final isInterrupted = message['isInterrupted'] as bool? ?? false;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -346,10 +355,10 @@ class _ConversationViewState extends State<ConversationView> {
               child: CircleAvatar(
                 radius: 16,
                 backgroundColor: Colors.blue[100],
-                child: const Icon(Icons.smart_toy, size: 18, color: Colors.blue),
+                child:
+                    const Icon(Icons.smart_toy, size: 18, color: Colors.blue),
               ),
             ),
-            
           Flexible(
             child: Column(
               crossAxisAlignment: source == MessageSource.user
@@ -357,7 +366,8 @@ class _ConversationViewState extends State<ConversationView> {
                   : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 10.0),
                   decoration: BoxDecoration(
                     color: widget.bubbleColors[source],
                     borderRadius: BorderRadius.circular(18.0),
@@ -370,10 +380,11 @@ class _ConversationViewState extends State<ConversationView> {
                         style: TextStyle(
                           color: widget.textColors[source],
                           fontSize: 16.0,
-                          fontStyle: isFinal ? FontStyle.normal : FontStyle.italic,
+                          fontStyle:
+                              isFinal ? FontStyle.normal : FontStyle.italic,
                         ),
                       ),
-                      
+
                       // 显示"正在输入"动画
                       if (!isFinal && source == MessageSource.ai)
                         Padding(
@@ -383,13 +394,14 @@ class _ConversationViewState extends State<ConversationView> {
                     ],
                   ),
                 ),
-                
+
                 // 显示"已打断"标签
                 if (isInterrupted)
                   Padding(
                     padding: const EdgeInsets.only(top: 4.0, left: 4.0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 2.0),
                       decoration: BoxDecoration(
                         color: Colors.red[100],
                         borderRadius: BorderRadius.circular(10.0),
@@ -406,7 +418,6 @@ class _ConversationViewState extends State<ConversationView> {
               ],
             ),
           ),
-          
           if (source == MessageSource.user)
             Padding(
               padding: const EdgeInsets.only(left: 8.0),
@@ -420,7 +431,7 @@ class _ConversationViewState extends State<ConversationView> {
       ),
     );
   }
-  
+
   /// 构建"正在输入"指示器
   Widget _buildTypingIndicator() {
     return Row(
@@ -453,4 +464,4 @@ class _ConversationViewState extends State<ConversationView> {
       }),
     );
   }
-} 
+}

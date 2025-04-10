@@ -53,23 +53,13 @@ typedef JsEventCallbackDouble = void Function(dynamic, dynamic);
 class RtcEventManager {
   // 单例实例
   static final RtcEventManager _instance = RtcEventManager._internal();
-  
+
   /// 全局访问点
   static RtcEventManager get instance => _instance;
 
   /// 内部构造函数，确保仅创建一个实例
-  RtcEventManager._internal() : config = RtcConfig(
-    appId: '',
-    userId: '',
-    roomId: '',
-    token: '',
-    taskId: '',
-    asrConfig: AsrConfig(),
-    ttsConfig: TtsConfig(),
-    llmConfig: LlmConfig(),
-  );
+  RtcEventManager._internal();
 
-  final RtcConfig config;
   dynamic _rtcClient;
   bool _engineSet = false;
 
@@ -96,23 +86,37 @@ class RtcEventManager {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _networkQualityController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _functionCallController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _audioDeviceStateChangedController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _autoPlayFailedController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _playerEventController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _userPublishStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _userUnpublishStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _localAudioPropertiesController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _remoteAudioPropertiesController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _trackEndedController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<void> _interruptController = StreamController<void>.broadcast();
-  
-  // 连接状态变化流控制器
-  final StreamController<Map<String, dynamic>> _connectionStateChangedController = 
+  final StreamController<Map<String, dynamic>> _functionCallController =
       StreamController<Map<String, dynamic>>.broadcast();
-  
+  final StreamController<Map<String, dynamic>>
+      _audioDeviceStateChangedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _autoPlayFailedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _playerEventController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userPublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userUnpublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _localAudioPropertiesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>>
+      _remoteAudioPropertiesController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _trackEndedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<void> _interruptController =
+      StreamController<void>.broadcast();
+
+  // 连接状态变化流控制器
+  final StreamController<Map<String, dynamic>>
+      _connectionStateChangedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
   // 二进制消息接收流控制器
-  final StreamController<Map<String, dynamic>> _binaryMessageReceivedController = 
+  final StreamController<Map<String, dynamic>>
+      _binaryMessageReceivedController =
       StreamController<Map<String, dynamic>>.broadcast();
 
   // State tracking
@@ -139,24 +143,33 @@ class RtcEventManager {
       _audioPropertiesController.stream;
   Stream<Map<String, dynamic>> get networkQualityStream =>
       _networkQualityController.stream;
-  Stream<Map<String, dynamic>> get functionCallStream => _functionCallController.stream;
-  Stream<Map<String, dynamic>> get audioDeviceStateChangedStream => _audioDeviceStateChangedController.stream;
-  Stream<Map<String, dynamic>> get autoPlayFailedStream => _autoPlayFailedController.stream;
-  Stream<Map<String, dynamic>> get playerEventStream => _playerEventController.stream;
-  Stream<Map<String, dynamic>> get userPublishStreamStream => _userPublishStreamController.stream;
-  Stream<Map<String, dynamic>> get userUnpublishStreamStream => _userUnpublishStreamController.stream;
-  Stream<Map<String, dynamic>> get localAudioPropertiesStream => _localAudioPropertiesController.stream;
-  Stream<Map<String, dynamic>> get remoteAudioPropertiesStream => _remoteAudioPropertiesController.stream;
-  Stream<Map<String, dynamic>> get trackEndedStream => _trackEndedController.stream;
-  
+  Stream<Map<String, dynamic>> get functionCallStream =>
+      _functionCallController.stream;
+  Stream<Map<String, dynamic>> get audioDeviceStateChangedStream =>
+      _audioDeviceStateChangedController.stream;
+  Stream<Map<String, dynamic>> get autoPlayFailedStream =>
+      _autoPlayFailedController.stream;
+  Stream<Map<String, dynamic>> get playerEventStream =>
+      _playerEventController.stream;
+  Stream<Map<String, dynamic>> get userPublishStreamStream =>
+      _userPublishStreamController.stream;
+  Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
+      _userUnpublishStreamController.stream;
+  Stream<Map<String, dynamic>> get localAudioPropertiesStream =>
+      _localAudioPropertiesController.stream;
+  Stream<Map<String, dynamic>> get remoteAudioPropertiesStream =>
+      _remoteAudioPropertiesController.stream;
+  Stream<Map<String, dynamic>> get trackEndedStream =>
+      _trackEndedController.stream;
+
   /// 音频捕获状态流 (audioStatusStream 的别名，用于兼容)
   Stream<bool> get audioCaptureStream => _audioStatusController.stream;
-  
+
   late RtcMessageHandler _messageHandler;
-  
+
   // 事件处理器映射表
   late final Map<String, Function> _eventMap;
-  
+
   // 已注册的事件处理器
   final Map<String, Function> _eventHandlers = {};
 
@@ -173,18 +186,20 @@ class RtcEventManager {
   // 错误处理和错误跟踪
   final List<RtcError> _errorHistory = [];
   bool _hasLoggedFatalError = false;
-  
+
   /// 最近发生的错误
-  RtcError? get lastError => _errorHistory.isNotEmpty ? _errorHistory.last : null;
-  
+  RtcError? get lastError =>
+      _errorHistory.isNotEmpty ? _errorHistory.last : null;
+
   /// 错误历史记录
   List<RtcError> get errorHistory => List.unmodifiable(_errorHistory);
-  
+
   /// 已加入的用户列表
   List<String> get joinedUsers => List.unmodifiable(_joinedUsers);
 
   /// 消息流控制器
-  final StreamController<RtcAigcMessage> _messageController = StreamController<RtcAigcMessage>.broadcast();
+  final StreamController<RtcAigcMessage> _messageController =
+      StreamController<RtcAigcMessage>.broadcast();
 
   /// 获取中断消息流
   Stream<void> get interruptStream => _interruptController.stream;
@@ -196,13 +211,13 @@ class RtcEventManager {
     if (_errorHistory.length > 10) {
       _errorHistory.removeAt(0); // 保持错误历史记录不超过10条
     }
-    
+
     // 发送错误到流
     _errorController.add(error);
-    
+
     // 打印错误信息
     debugPrint('RTC错误: ${error.code} - ${error.message}');
-    
+
     // 处理致命错误
     if (error.isFatal && !_hasLoggedFatalError) {
       _hasLoggedFatalError = true; // 避免重复记录致命错误
@@ -211,8 +226,8 @@ class RtcEventManager {
   }
 
   /// 构造函数
-  RtcEventManager({required this.config}) {
-    _messageHandler = RtcMessageHandler(config: config);
+  RtcEventManager() {
+    _messageHandler = RtcMessageHandler();
     _setupEventMap();
   }
 
@@ -223,22 +238,22 @@ class RtcEventManager {
       debugPrint('引擎已设置，先注销现有事件');
       _eventHandlers.keys.toList().forEach(_unregisterEvent);
     }
-    
+
     _rtcClient = rtcClient;
     _engineSet = true;
-    
+
     // 设置消息处理器的引擎
     _messageHandler.setEngine(rtcClient);
-    
+
     // 获取事件常量
     _getEvents();
-    
+
     // 注册事件处理器
     _registerEventHandlers();
-    
+
     // 配置消息处理器监听
     _setupMessageHandlerListeners();
-    
+
     // 初始获取设备列表
     _getAudioDevices();
   }
@@ -273,18 +288,17 @@ class RtcEventManager {
     _messageHandler.subtitleStream.listen((data) {
       if (data != null && data.containsKey('text')) {
         final text = data['text'] as String;
-        debugPrint('RtcEventManager: 从消息处理器接收字幕: $text');
         _subtitleController.add(text);
       }
     });
-    
+
     _messageHandler.stateStream.listen((data) {
       if (data != null && data.containsKey('type')) {
         debugPrint('RtcEventManager: 从消息处理器接收状态更新: ${data['type']}');
         _stateController.add(data);
       }
     });
-    
+
     _messageHandler.functionCallStream.listen((data) {
       debugPrint('RtcEventManager: 从消息处理器接收函数调用: ${data['name']}');
       _stateController.add({
@@ -303,7 +317,7 @@ class RtcEventManager {
         _events = js.context['VERTC']['events'];
         if (_events != null) {
           debugPrint('成功获取VERTC.events常量');
-          
+
           // 预缓存常用事件引用以提高性能
           final commonEvents = [
             'onTrackEnded',
@@ -313,7 +327,7 @@ class RtcEventManager {
             'onConnectionStateChanged',
             'onRoomBinaryMessageReceived'
           ];
-          
+
           for (var eventName in commonEvents) {
             if (_events.hasProperty(eventName)) {
               debugPrint('预缓存事件常量: $eventName');
@@ -323,7 +337,7 @@ class RtcEventManager {
           return;
         }
       }
-      
+
       debugPrint('无法获取VERTC.events常量，将使用字符串事件名');
     } catch (e) {
       debugPrint('获取事件常量出错: $e');
@@ -339,7 +353,7 @@ class RtcEventManager {
     } catch (e) {
       debugPrint('获取事件引用出错: $e');
     }
-    
+
     return eventName;
   }
 
@@ -358,7 +372,7 @@ class RtcEventManager {
     try {
       // 获取事件引用 - 使用优化的方法
       dynamic eventRef = _getEventRef(eventName);
-      
+
       // 存储回调函数，防止被垃圾回收
       _eventHandlers[eventName] = callback;
 
@@ -400,11 +414,11 @@ class RtcEventManager {
   /// 注销事件处理器
   void _unregisterEvent(String eventName) {
     if (_rtcClient == null) return;
-    
+
     try {
       // 使用优化的方法获取事件引用
       dynamic eventRef = _getEventRef(eventName);
-      
+
       js_util.callMethod(_rtcClient, 'off', [eventRef]);
       _eventHandlers.remove(eventName);
       debugPrint('已注销 $eventName 事件处理器');
@@ -422,7 +436,7 @@ class RtcEventManager {
 
     try {
       debugPrint('正在注册RTC事件处理器...');
-      
+
       // 批量注册事件，使用映射表
       _eventMap.forEach((eventName, handler) {
         _registerEvent(eventName, handler);
@@ -521,6 +535,7 @@ class RtcEventManager {
       String username = userId;
       dynamic extraInfo;
 
+      debugPrint('事件: onUserJoined ${userId} ${username}');
       try {
         extraInfo = js_util.getProperty(event, 'userInfo.extraInfo');
         if (extraInfo != null && extraInfo.toString() != 'undefined') {
@@ -535,7 +550,6 @@ class RtcEventManager {
         debugPrint('解析extraInfo出错: $e');
       }
 
-      debugPrint('事件: onUserJoined ${userId} ${username}');
       _stateController.add({
         'type': 'user_joined',
         'userId': userId,
@@ -610,10 +624,10 @@ class RtcEventManager {
       debugPrint('事件: onUserStartAudioCapture ${userId}');
 
       // 更新音频状态
-      if (userId == config.userId) {
-        _isAudioCapturing = true;
-        _audioStatusController.add(true);
-      }
+      // if (userId == config.userId) {
+      //   _isAudioCapturing = true;
+      //   _audioStatusController.add(true);
+      // }
 
       _stateController.add({
         'type': 'user_start_audio_capture',
@@ -631,10 +645,10 @@ class RtcEventManager {
       final userId = js_util.getProperty(event, 'userId') ?? '';
 
       // 更新音频状态
-      if (userId == config.userId) {
-        _isAudioCapturing = false;
-        _audioStatusController.add(false);
-      }
+      // if (userId == config.userId) {
+      //   _isAudioCapturing = false;
+      //   _audioStatusController.add(false);
+      // }
 
       _stateController.add({
         'type': 'user_stop_audio_capture',
@@ -647,7 +661,6 @@ class RtcEventManager {
   }
 
   void _handleRoomBinaryMessageReceived(dynamic event) {
-    debugPrint('事件: onRoomBinaryMessageReceived');
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       final message = js_util.getProperty(event, 'message');
@@ -796,8 +809,7 @@ class RtcEventManager {
       for (int i = 0; i < length; i++) {
         final dynamic audioInfo = event[i];
         if (audioInfo != null) {
-          final dynamic streamKey =
-              js_util.getProperty(audioInfo, 'streamKey');
+          final dynamic streamKey = js_util.getProperty(audioInfo, 'streamKey');
           final dynamic properties =
               js_util.getProperty(audioInfo, 'audioPropertiesInfo');
 
@@ -835,7 +847,6 @@ class RtcEventManager {
       if (downlink != null) {
         uplinkQuality = _safeParseInt(uplink);
         downlinkQuality = _safeParseInt(downlink);
-        debugPrint('网络质量（双参数）- 上行: $uplinkQuality, 下行: $downlinkQuality');
       }
       // 如果只传入了一个参数，但它是列表或对象
       else if (uplink != null) {
@@ -914,7 +925,7 @@ class RtcEventManager {
       debugPrint('正在注销所有事件...');
       _eventHandlers.keys.toList().forEach(_unregisterEvent);
     }
-    
+
     // 关闭所有流控制器
     _stateController.close();
     _connectionStateController.close();
@@ -939,7 +950,7 @@ class RtcEventManager {
     _connectionStateChangedController.close();
     _binaryMessageReceivedController.close();
     _interruptController.close();
-    
+
     _engineSet = false;
     debugPrint('RtcEventManager 资源已释放');
   }
@@ -954,19 +965,19 @@ class RtcEventManager {
         }
 
         debugPrint('收到二进制消息: ${eventData.toString()}');
-        
+
         // 解析二进制消息数据
         final String? uid = js_util.getProperty(eventData, 'uid');
         final dynamic message = js_util.getProperty(eventData, 'message');
-        
+
         if (uid == null || message == null) {
           debugPrint('二进制消息数据不完整');
           return;
         }
-        
+
         // 将ArrayBuffer转换为Uint8List
         final Uint8List messageBytes = _arrayBufferToUint8List(message);
-        
+
         // 通过流控制器传递事件
         _binaryMessageReceivedController.add({
           'uid': uid,
@@ -985,25 +996,25 @@ class RtcEventManager {
       if (arrayBuffer is Uint8List) {
         return arrayBuffer;
       }
-      
+
       // 创建Uint8Array视图
       final uint8Array = js_util.callMethod(
         js.context,
         'Uint8Array.from',
         [arrayBuffer],
       );
-      
+
       // 获取长度
       final int length = js_util.getProperty(uint8Array, 'length');
-      
+
       // 初始化Uint8List
       final Uint8List result = Uint8List(length);
-      
+
       // 复制数据
       for (int i = 0; i < length; i++) {
         result[i] = js_util.getProperty(uint8Array, i);
       }
-      
+
       return result;
     } catch (e) {
       debugPrint('ArrayBuffer转换失败: $e');
@@ -1021,22 +1032,23 @@ class RtcEventManager {
         }
 
         debugPrint('连接状态变化: ${eventData.toString()}');
-        
+
         // 解析连接状态数据
         final dynamic stateValue = js_util.getProperty(eventData, 'state');
-        final int? reason = _safeCastToInt(js_util.getProperty(eventData, 'reason'));
-        
+        final int? reason =
+            _safeCastToInt(js_util.getProperty(eventData, 'reason'));
+
         if (stateValue == null) {
           debugPrint('连接状态数据不完整');
           return;
         }
-        
+
         // 确保状态是字符串
         final String state = stateValue.toString();
-        
+
         // 更新连接状态
         _connectionState = state;
-        
+
         // 通过流控制器传递事件
         _connectionStateChangedController.add({
           'state': state,
@@ -1051,12 +1063,12 @@ class RtcEventManager {
   /// 安全地将JavaScript值转换为int
   int? _safeCastToInt(dynamic value) {
     if (value == null) return null;
-    
+
     try {
       if (value is int) return value;
       if (value is double) return value.toInt();
       if (value is String) return int.tryParse(value);
-      
+
       // 尝试通过JavaScript转换
       return js_util.callMethod(js.context, 'Number', [value]);
     } catch (e) {
@@ -1068,7 +1080,8 @@ class RtcEventManager {
   void _handleErrorEvent(dynamic event) {
     try {
       final errorCode = js_util.getProperty(event, 'errorCode') ?? 0;
-      final errorMessage = js_util.getProperty(event, 'errorMessage') ?? 'Unknown error';
+      final errorMessage =
+          js_util.getProperty(event, 'errorMessage') ?? 'Unknown error';
       debugPrint('事件: onError ${errorCode} ${errorMessage}');
 
       // 创建RtcError对象
@@ -1081,7 +1094,7 @@ class RtcEventManager {
 
       // 使用新的错误处理方法
       _handleError(error);
-      
+
       // 更新连接状态
       _connectionStateController.add('error');
     } catch (e) {
@@ -1101,31 +1114,34 @@ class RtcEventManager {
       }
 
       debugPrint('会话状态变化: ${event.toString()}');
-      
+
       // 解析状态变化数据
       final dynamic stageValue = js_util.getProperty(event, 'Stage');
       if (stageValue == null) {
         debugPrint('状态变化数据不完整，无法获取Stage字段');
         return;
       }
-      
+
       final dynamic codeValue = js_util.getProperty(stageValue, 'Code');
       if (codeValue == null) {
         debugPrint('状态变化数据不完整，无法获取Code字段');
         return;
       }
-      
+
       final int stageCode = _safeCastToInt(codeValue) ?? -1;
-      final String stageDesc = js_util.getProperty(stageValue, 'Description')?.toString() ?? 'Unknown';
-      
+      final String stageDesc =
+          js_util.getProperty(stageValue, 'Description')?.toString() ??
+              'Unknown';
+
       debugPrint('会话阶段: $stageCode - $stageDesc');
 
       // 处理中断状态 (INTERRUPTED = 4)
-      if (stageCode == 4) { // AGENT_BRIEF.INTERRUPTED
+      if (stageCode == 4) {
+        // AGENT_BRIEF.INTERRUPTED
         debugPrint('检测到会话被中断');
         _interruptController.add(null); // 触发中断事件
       }
-      
+
       // ... 处理其他状态 ...
     } catch (e) {
       debugPrint('处理会话状态变化出错: $e');
