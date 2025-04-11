@@ -63,60 +63,61 @@ class RtcEventManager {
   dynamic _rtcClient;
   bool _engineSet = false;
 
-  // Stream controllers
+  // Stream controllers for core events
   final StreamController<Map<String, dynamic>> _stateController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<String> _connectionStateController =
       StreamController<String>.broadcast();
   final StreamController<RtcError> _errorController =
       StreamController<RtcError>.broadcast();
+
+  // Stream controllers for audio events
   final StreamController<List<dynamic>> _audioDevicesController =
       StreamController<List<dynamic>>.broadcast();
   final StreamController<bool> _audioStatusController =
       StreamController<bool>.broadcast();
-  final StreamController<Map<String, dynamic>> _subtitleController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<String> _userJoinController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _userLeaveController =
-      StreamController<String>.broadcast();
-  final StreamController<String> _userStartAudioCaptureController =
-      StreamController<String>.broadcast();
-  final StreamController<Map<String, dynamic>> _subtitleStateController =
-      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _audioPropertiesController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _networkQualityController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _functionCallController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>>
-      _audioDeviceStateChangedController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _autoPlayFailedController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _playerEventController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _userPublishStreamController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _userUnpublishStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _localAudioPropertiesController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>>
       _remoteAudioPropertiesController =
       StreamController<Map<String, dynamic>>.broadcast();
+
+  // Stream controllers for user events
+  final StreamController<String> _userJoinController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _userLeaveController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _userStartAudioCaptureController =
+      StreamController<String>.broadcast();
+  final StreamController<String> _userStopAudioCaptureController =
+      StreamController<String>.broadcast();
+  final StreamController<Map<String, dynamic>> _userPublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _userUnpublishStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  // Stream controllers for media events
+  final StreamController<Map<String, dynamic>> _subtitleController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _subtitleStateController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _networkQualityController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _functionCallController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _autoPlayFailedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _playerEventController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _trackEndedController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<void> _interruptController =
-      StreamController<void>.broadcast();
-
-  // 连接状态变化流控制器
+  final StreamController<Map<String, dynamic>> _interruptController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>>
       _connectionStateChangedController =
       StreamController<Map<String, dynamic>>.broadcast();
-
-  // 二进制消息接收流控制器
   final StreamController<Map<String, dynamic>>
       _binaryMessageReceivedController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -131,40 +132,46 @@ class RtcEventManager {
 
   // Streams
   Stream<Map<String, dynamic>> get stateStream => _stateController.stream;
-  Stream<String> get connectionStream => _connectionStateController.stream;
+  Stream<String> get connectionStateStream => _connectionStateController.stream;
   Stream<RtcError> get errorStream => _errorController.stream;
   Stream<List<dynamic>> get audioDevicesStream =>
       _audioDevicesController.stream;
   Stream<bool> get audioStatusStream => _audioStatusController.stream;
-  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
-  Stream<String> get userJoinStream => _userJoinController.stream;
-  Stream<String> get userLeaveStream => _userLeaveController.stream;
-  Stream<String> get userStartAudioCaptureStream =>
-      _userStartAudioCaptureController.stream;
-  Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _subtitleStateController.stream;
   Stream<Map<String, dynamic>> get audioPropertiesStream =>
       _audioPropertiesController.stream;
-  Stream<Map<String, dynamic>> get networkQualityStream =>
-      _networkQualityController.stream;
-  Stream<Map<String, dynamic>> get functionCallStream =>
-      _functionCallController.stream;
-  Stream<Map<String, dynamic>> get audioDeviceStateChangedStream =>
-      _audioDeviceStateChangedController.stream;
-  Stream<Map<String, dynamic>> get autoPlayFailedStream =>
-      _autoPlayFailedController.stream;
-  Stream<Map<String, dynamic>> get playerEventStream =>
-      _playerEventController.stream;
-  Stream<Map<String, dynamic>> get userPublishStreamStream =>
-      _userPublishStreamController.stream;
-  Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
-      _userUnpublishStreamController.stream;
   Stream<Map<String, dynamic>> get localAudioPropertiesStream =>
       _localAudioPropertiesController.stream;
   Stream<Map<String, dynamic>> get remoteAudioPropertiesStream =>
       _remoteAudioPropertiesController.stream;
+  Stream<String> get userJoinStream => _userJoinController.stream;
+  Stream<String> get userLeaveStream => _userLeaveController.stream;
+  Stream<String> get userStartAudioCaptureStream =>
+      _userStartAudioCaptureController.stream;
+  Stream<String> get userStopAudioCaptureStream =>
+      _userStopAudioCaptureController.stream;
+  Stream<Map<String, dynamic>> get userPublishStreamStream =>
+      _userPublishStreamController.stream;
+  Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
+      _userUnpublishStreamController.stream;
+  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
+  Stream<Map<String, dynamic>> get subtitleStateStream =>
+      _subtitleStateController.stream;
+  Stream<Map<String, dynamic>> get networkQualityStream =>
+      _networkQualityController.stream;
+  Stream<Map<String, dynamic>> get functionCallStream =>
+      _functionCallController.stream;
+  Stream<Map<String, dynamic>> get autoPlayFailedStream =>
+      _autoPlayFailedController.stream;
+  Stream<Map<String, dynamic>> get playerEventStream =>
+      _playerEventController.stream;
   Stream<Map<String, dynamic>> get trackEndedStream =>
       _trackEndedController.stream;
+  Stream<Map<String, dynamic>> get interruptStream =>
+      _interruptController.stream;
+  Stream<Map<String, dynamic>> get connectionStateChangedStream =>
+      _connectionStateChangedController.stream;
+  Stream<Map<String, dynamic>> get binaryMessageReceivedStream =>
+      _binaryMessageReceivedController.stream;
 
   /// 音频捕获状态流 (audioStatusStream 的别名，用于兼容)
   Stream<bool> get audioCaptureStream => _audioStatusController.stream;
@@ -205,9 +212,6 @@ class RtcEventManager {
   final StreamController<RtcAigcMessage> _messageController =
       StreamController<RtcAigcMessage>.broadcast();
 
-  /// 获取中断消息流
-  Stream<void> get interruptStream => _interruptController.stream;
-
   /// 用于记录和处理RTC错误
   void _handleError(RtcError error) {
     // 记录错误
@@ -229,22 +233,35 @@ class RtcEventManager {
     }
   }
 
-  /// 构造函数
-  RtcEventManager() {
-    _messageHandler = RtcMessageHandler();
-    _setupEventMap();
+  /// 构造函数 - 支持依赖注入
+  RtcEventManager({RtcMessageHandler? messageHandler}) {
+    // 如果提供了外部消息处理器实例，则使用外部实例
+    if (messageHandler != null) {
+      // 重要：设置消息处理器的回调
+      messageHandler.onSubtitle = (subtitle) {
+        _subtitleController.add(subtitle);
+      };
+
+      messageHandler.onFunctionCall = (functionCall) {
+        _functionCallController.add(functionCall);
+      };
+
+      messageHandler.onState = (state) {
+        _stateController.add(state);
+      };
+    }
   }
 
   /// 设置引擎并初始化事件监听
   void setEngine(dynamic rtcClient) {
-    // 防止重复设置，如果引擎已设置，先注销现有事件
-    if (_engineSet && _rtcClient != null) {
-      debugPrint('引擎已设置，先注销现有事件');
-      _eventHandlers.keys.toList().forEach(_unregisterEvent);
+    if (_engineSet) {
+      debugPrint('RtcEventManager: 引擎已设置，跳过');
+      return;
     }
 
     _rtcClient = rtcClient;
     _engineSet = true;
+    debugPrint('RtcEventManager: 引擎设置成功');
 
     // 设置消息处理器的引擎
     _messageHandler.setEngine(rtcClient);
@@ -666,19 +683,24 @@ class RtcEventManager {
     }
   }
 
+  /// 处理房间二进制消息接收事件
   void _handleRoomBinaryMessageReceived(dynamic event) {
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       final message = js_util.getProperty(event, 'message');
 
+      debugPrint(
+          '【事件系统】收到二进制消息，用户ID: $userId，消息长度: ${message != null ? "有数据" : "无数据"}');
+
       if (message != null) {
-        // 转发给消息处理器
+        // 将消息传递给消息处理器
         _messageHandler.handleBinaryMessage(userId, message);
       } else {
-        debugPrint('二进制消息为空');
+        debugPrint('【事件系统】二进制消息为空，无法处理');
       }
-    } catch (e) {
-      debugPrint('处理onRoomBinaryMessageReceived事件出错: $e');
+    } catch (e, stackTrace) {
+      debugPrint('【事件系统】处理二进制消息异常: $e');
+      debugPrint('堆栈: $stackTrace');
     }
   }
 
@@ -936,150 +958,28 @@ class RtcEventManager {
     _errorController.close();
     _audioDevicesController.close();
     _audioStatusController.close();
-    _subtitleController.close();
+    _audioPropertiesController.close();
+    _localAudioPropertiesController.close();
+    _remoteAudioPropertiesController.close();
     _userJoinController.close();
     _userLeaveController.close();
     _userStartAudioCaptureController.close();
-    _subtitleStateController.close();
-    _audioPropertiesController.close();
-    _networkQualityController.close();
-    _functionCallController.close();
-    _audioDeviceStateChangedController.close();
-    _autoPlayFailedController.close();
-    _playerEventController.close();
+    _userStopAudioCaptureController.close();
     _userPublishStreamController.close();
     _userUnpublishStreamController.close();
-    _localAudioPropertiesController.close();
-    _remoteAudioPropertiesController.close();
+    _subtitleController.close();
+    _subtitleStateController.close();
+    _networkQualityController.close();
+    _functionCallController.close();
+    _autoPlayFailedController.close();
+    _playerEventController.close();
     _trackEndedController.close();
     _interruptController.close();
     _connectionStateChangedController.close();
     _binaryMessageReceivedController.close();
 
     _engineSet = false;
-    debugPrint('RtcEventManager 资源已释放');
-  }
-
-  /// 注册二进制消息接收事件
-  void _registerOnRoomBinaryMessageReceived() {
-    _registerEvent('onRoomBinaryMessageReceived', (dynamic eventData) {
-      try {
-        if (eventData == null) {
-          debugPrint('二进制消息接收事件无数据');
-          return;
-        }
-
-        debugPrint('收到二进制消息: ${eventData.toString()}');
-
-        // 解析二进制消息数据
-        final String? uid = js_util.getProperty(eventData, 'uid');
-        final dynamic message = js_util.getProperty(eventData, 'message');
-
-        if (uid == null || message == null) {
-          debugPrint('二进制消息数据不完整');
-          return;
-        }
-
-        // 将ArrayBuffer转换为Uint8List
-        final Uint8List messageBytes = _arrayBufferToUint8List(message);
-
-        // 通过流控制器传递事件
-        _binaryMessageReceivedController.add({
-          'uid': uid,
-          'message': messageBytes,
-        });
-      } catch (e) {
-        debugPrint('处理二进制消息出错: $e');
-      }
-    });
-  }
-
-  /// 将JavaScript ArrayBuffer转换为Dart Uint8List
-  Uint8List _arrayBufferToUint8List(dynamic arrayBuffer) {
-    try {
-      // 先尝试直接转换
-      if (arrayBuffer is Uint8List) {
-        return arrayBuffer;
-      }
-
-      // 创建Uint8Array视图
-      final uint8Array = js_util.callMethod(
-        js.context,
-        'Uint8Array.from',
-        [arrayBuffer],
-      );
-
-      // 获取长度
-      final int length = js_util.getProperty(uint8Array, 'length');
-
-      // 初始化Uint8List
-      final Uint8List result = Uint8List(length);
-
-      // 复制数据
-      for (int i = 0; i < length; i++) {
-        result[i] = js_util.getProperty(uint8Array, i);
-      }
-
-      return result;
-    } catch (e) {
-      debugPrint('ArrayBuffer转换失败: $e');
-      return Uint8List(0);
-    }
-  }
-
-  /// 注册连接状态变化事件
-  void _registerOnConnectionStateChanged() {
-    _registerEvent('onConnectionStateChanged', (dynamic eventData) {
-      try {
-        if (eventData == null) {
-          debugPrint('连接状态变化事件无数据');
-          return;
-        }
-
-        debugPrint('连接状态变化: ${eventData.toString()}');
-
-        // 解析连接状态数据
-        final dynamic stateValue = js_util.getProperty(eventData, 'state');
-        final int? reason =
-            _safeCastToInt(js_util.getProperty(eventData, 'reason'));
-
-        if (stateValue == null) {
-          debugPrint('连接状态数据不完整');
-          return;
-        }
-
-        // 确保状态是字符串
-        final String state = stateValue.toString();
-
-        // 更新连接状态
-        _connectionState = state;
-
-        // 通过流控制器传递事件
-        _connectionStateChangedController.add({
-          'state': state,
-          'reason': reason ?? 0,
-        });
-      } catch (e) {
-        debugPrint('处理连接状态变化出错: $e');
-      }
-    });
-  }
-
-  /// 安全地将JavaScript值转换为int
-  int? _safeCastToInt(dynamic value) {
-    if (value == null) return null;
-
-    try {
-      if (value is int) return value;
-      if (value is double) return value.toInt();
-      if (value is String) return int.tryParse(value);
-
-      // 尝试通过JavaScript转换
-      return js_util.callMethod(js.context, 'Number', [value]);
-    } catch (e) {
-      debugPrint('无法转换为int: $value');
-      return null;
-    }
+    debugPrint('RtcEventManager: 资源已释放');
   }
 
   void _handleErrorEvent(dynamic event) {
@@ -1144,12 +1044,29 @@ class RtcEventManager {
       if (stageCode == 4) {
         // AGENT_BRIEF.INTERRUPTED
         debugPrint('检测到会话被中断');
-        _interruptController.add(null); // 触发中断事件
+        _interruptController.add({}); // 触发中断事件
       }
 
       // ... 处理其他状态 ...
     } catch (e) {
       debugPrint('处理会话状态变化出错: $e');
+    }
+  }
+
+  /// 安全地将JavaScript值转换为int
+  int? _safeCastToInt(dynamic value) {
+    if (value == null) return null;
+
+    try {
+      if (value is int) return value;
+      if (value is double) return value.toInt();
+      if (value is String) return int.tryParse(value);
+
+      // 尝试通过JavaScript转换
+      return js_util.callMethod(js.context, 'Number', [value]);
+    } catch (e) {
+      debugPrint('无法转换为int: $value');
+      return null;
     }
   }
 }

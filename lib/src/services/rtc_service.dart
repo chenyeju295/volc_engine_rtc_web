@@ -43,25 +43,31 @@ typedef RtcAudioPropertiesCallback = void Function(
 /// RTC用户发布流回调
 typedef RtcUserPublishStreamCallback = void Function(Map<String, dynamic> data);
 
+/// RTC用户相关事件回调
+typedef RtcUserEventCallback = void Function(Map<String, dynamic> data);
+
+/// 状态变更回调
+typedef StateChangeCallback = void Function(String state, String? message);
+
 /// RTC服务 - 提供统一的接口用于RTC相关操作
 class RtcService {
   /// 配置信息
   final AigcConfig _config;
 
-  /// 引擎管理器
+  /// Get the current configuration
+  AigcConfig get config => _config;
+
+  /// 引擎管理器 - 内部组件
   final RtcEngineManager _engineManager;
 
-  /// 设备管理器
+  /// 设备管理器 - 内部组件
   final RtcDeviceManager _deviceManager;
 
-  /// 事件管理器
+  /// 事件管理器 - 内部组件
   final RtcEventManager _eventManager;
 
-  /// 公开获取事件管理器
-  RtcEventManager get eventManager => _eventManager;
-
-  /// 消息处理器
-  late final RtcMessageHandler _messageHandler;
+  /// 消息处理器 - 内部组件
+  final RtcMessageHandler _messageHandler;
 
   /// AIGC客户端
   AigcClient? _aigcClient;
@@ -95,6 +101,17 @@ class RtcService {
 
   /// 用户发布流回调
   RtcUserPublishStreamCallback? _userPublishStreamCallback;
+
+  /// 状态变更回调 
+  StateChangeCallback? onStateChange;
+
+  /// 用户相关事件回调
+  RtcUserEventCallback? onUserJoined;
+  RtcUserEventCallback? onUserLeave;
+  RtcUserEventCallback? onUserPublishStream;
+  RtcUserEventCallback? onUserUnpublishStream;
+  RtcUserEventCallback? onUserStartAudioCapture;
+  RtcUserEventCallback? onUserStopAudioCapture;
 
   /// 状态流控制器
   final StreamController<RtcState> _stateController =
@@ -161,6 +178,22 @@ class RtcService {
   final StreamController<Map<String, dynamic>> _userUnpublishStreamController =
       StreamController<Map<String, dynamic>>.broadcast();
 
+  /// 用户加入流控制器
+  final StreamController<Map<String, dynamic>> _userJoinedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 用户离开流控制器
+  final StreamController<Map<String, dynamic>> _userLeaveController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 用户开始音频采集流控制器
+  final StreamController<Map<String, dynamic>> _userStartAudioCaptureController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 用户停止音频采集流控制器
+  final StreamController<Map<String, dynamic>> _userStopAudioCaptureController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
   /// 消息历史
   final List<RtcAigcMessage> _messageHistory = [];
 
@@ -176,17 +209,18 @@ class RtcService {
   /// 是否已销毁
   bool _isDisposed = false;
 
-  /// 构造函数
+  /// 构造函数 - 使用依赖注入
   RtcService({
     required AigcConfig config,
     required RtcEngineManager engineManager,
     required RtcDeviceManager deviceManager,
     required RtcEventManager eventManager,
+    required RtcMessageHandler messageHandler,
   })  : _config = config,
         _engineManager = engineManager,
         _deviceManager = deviceManager,
-        _eventManager = eventManager {
-    _messageHandler = RtcMessageHandler();
+        _eventManager = eventManager,
+        _messageHandler = messageHandler {
     _init();
   }
 
@@ -242,6 +276,18 @@ class RtcService {
   Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
       _userUnpublishStreamController.stream;
 
+  /// 用户加入流
+  Stream<Map<String, dynamic>> get userJoinedStream => _userJoinedController.stream;
+
+  /// 用户离开流
+  Stream<Map<String, dynamic>> get userLeaveStream => _userLeaveController.stream;
+
+  /// 用户开始音频采集流
+  Stream<Map<String, dynamic>> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
+
+  /// 用户停止音频采集流
+  Stream<Map<String, dynamic>> get userStopAudioCaptureStream => _userStopAudioCaptureController.stream;
+
   /// 初始化
   Future<void> _init() async {
     try {
@@ -266,6 +312,13 @@ class RtcService {
     // 监听用户加入
     _eventManager.userJoinStream.listen((userId) {
       debugPrint('【RTC服务】用户加入: $userId');
+      
+      final data = {'userId': userId};
+      _userJoinedController.add(data);
+      
+      if (onUserJoined != null) {
+        onUserJoined!(data);
+      }
 
       if (_messageCallback != null) {
         final message = RtcAigcMessage(
@@ -280,6 +333,13 @@ class RtcService {
     // 监听用户离开
     _eventManager.userLeaveStream.listen((userId) {
       debugPrint('【RTC服务】用户离开: $userId');
+      
+      final data = {'userId': userId};
+      _userLeaveController.add(data);
+      
+      if (onUserLeave != null) {
+        onUserLeave!(data);
+      }
 
       if (_messageCallback != null) {
         final message = RtcAigcMessage(
@@ -342,6 +402,40 @@ class RtcService {
       if (_stateCallback != null) {
         _stateCallback!(_state);
       }
+      
+      // Translate state for compatibility with previous API
+      String stateStr;
+      String? message;
+      
+      switch (_state) {
+        case RtcState.initialized:
+          stateStr = 'ready';
+          message = '服务就绪';
+          break;
+        case RtcState.inRoom:
+          stateStr = 'joined';
+          message = '已加入房间';
+          break;
+        case RtcState.inConversation:
+          stateStr = 'inConversation';
+          message = '对话进行中';
+          break;
+        case RtcState.waitingResponse:
+          stateStr = 'waiting';
+          message = '等待响应';
+          break;
+        case RtcState.error:
+          stateStr = 'error';
+          message = '发生错误';
+          break;
+        default:
+          stateStr = 'unknown';
+          message = '未知状态';
+      }
+      
+      if (onStateChange != null) {
+        onStateChange!(stateStr, message);
+      }
     });
 
     // 监听音频状态变化
@@ -355,7 +449,7 @@ class RtcService {
     });
 
     // 监听连接状态
-    _eventManager.connectionStream.listen((state) {
+    _eventManager.connectionStateStream.listen((state) {
       debugPrint('【RTC服务】连接状态变更: $state');
 
       RtcConnectionState connectionState;
@@ -402,7 +496,7 @@ class RtcService {
     });
 
     // 监听设备状态变化
-    _eventManager.audioDeviceStateChangedStream.listen((data) {
+    _eventManager.audioDevicesStream.listen((data) {
       debugPrint('【RTC服务】音频设备状态变化');
       _deviceStateController.add(true);
     });
@@ -585,6 +679,25 @@ class RtcService {
         debugPrint('【RTC服务】已初始化，跳过');
         return true;
       }
+
+      // 初始化引擎
+      final engineSuccess = await _engineManager.initialize();
+      if (!engineSuccess) {
+        debugPrint('【RTC服务】引擎初始化失败');
+        return false;
+      }
+
+      // 获取RTC客户端实例
+      final rtcClient = _engineManager.getRtcClient();
+      if (rtcClient == null) {
+        debugPrint('【RTC服务】无法获取RTC客户端实例');
+        return false;
+      }
+
+      // 设置内部组件的引擎实例
+      _messageHandler.setEngine(rtcClient);
+      _eventManager.setEngine(rtcClient);
+      _deviceManager.setEngine(rtcClient);
 
       // 注册事件处理器
       _engineManager.registerEventHandler(_eventManager);
@@ -1135,52 +1248,16 @@ class RtcService {
       _remoteAudioPropertiesController.close();
       _userPublishStreamController.close();
       _userUnpublishStreamController.close();
+      _userJoinedController.close();
+      _userLeaveController.close();
+      _userStartAudioCaptureController.close();
+      _userStopAudioCaptureController.close();
 
       _isDisposed = true;
       _isInitialized = false;
       debugPrint('【RTC服务】销毁完成');
     } catch (e) {
       debugPrint('【RTC服务】销毁时发生错误: $e');
-    }
-  }
-
-  /// 初始化引擎
-  Future<bool> initializeEngine() async {
-    if (_isDisposed) {
-      return false;
-    }
-
-    try {
-      debugPrint('【RTC服务】初始化RTC引擎');
-
-      // 初始化引擎
-      final success = await _engineManager.initialize();
-      if (!success) {
-        debugPrint('【RTC服务】引擎初始化失败');
-        return false;
-      }
-
-      // 获取RTC客户端实例
-      final rtcClient = _engineManager.getRtcClient();
-      if (rtcClient == null) {
-        debugPrint('【RTC服务】无法获取RTC客户端实例');
-        return false;
-      }
-
-      // 设置消息处理器的引擎
-      _messageHandler.setEngine(rtcClient);
-
-      // 设置事件管理器的引擎
-      _eventManager.setEngine(rtcClient);
-
-      // 设置设备管理器的引擎
-      _deviceManager.setEngine(rtcClient);
-
-      debugPrint('【RTC服务】引擎初始化成功');
-      return true;
-    } catch (e) {
-      debugPrint('【RTC服务】初始化引擎失败: $e');
-      return false;
     }
   }
 }

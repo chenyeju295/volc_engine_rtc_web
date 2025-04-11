@@ -174,12 +174,78 @@ class RtcMessageUtils {
     if (text.isEmpty) return null;
     
     try {
+      // 检查文本是否以'conv{'开头 - 这是一种常见的错误格式
+      if (text.startsWith('conv') && !text.startsWith('conv"') && !text.startsWith('conv:')) {
+        // 尝试修复格式，将conv{替换为{"type":"conv",
+        String fixedText = text.replaceFirst('conv{', '{"type":"conv",');
+        try {
+          final dynamic result = jsonDecode(fixedText);
+          if (result is Map<String, dynamic>) {
+            debugPrint('RtcMessageUtils: 成功修复并解析了conv格式的JSON消息');
+            return result;
+          }
+        } catch (innerError) {
+          // 修复失败，尝试从conv之后的部分解析
+          if (text.contains('{')) {
+            String jsonPart = text.substring(text.indexOf('{'));
+            try {
+              final dynamic result = jsonDecode(jsonPart);
+              if (result is Map<String, dynamic>) {
+                debugPrint('RtcMessageUtils: 成功提取并解析了JSON部分');
+                // 将消息类型添加到返回的Map中
+                if (result is Map<String, dynamic>) {
+                  result['type'] = 'conv';
+                  return result;
+                }
+              }
+            } catch (e) {
+              // 继续使用原始解析逻辑
+            }
+          }
+        }
+      }
+      
+      // 标准解析尝试
       final dynamic result = jsonDecode(text);
       if (result is Map<String, dynamic>) {
         return result;
+      } else if (result is List) {
+        // 如果是数组，尝试将其包装在一个对象中
+        return {'data': result};
+      } else {
+        debugPrint('RtcMessageUtils: JSON解析结果不是Map或List: ${result.runtimeType}');
       }
     } catch (e) {
       debugPrint('RtcMessageUtils: 解析JSON出错: $e');
+      
+      // 尝试检测并修复常见JSON格式错误
+      if (text.contains('{') && text.contains('}')) {
+        try {
+          // 尝试从第一个'{'到最后一个'}'提取JSON
+          int start = text.indexOf('{');
+          int end = text.lastIndexOf('}') + 1;
+          
+          if (start >= 0 && end > start) {
+            String possibleJson = text.substring(start, end);
+            try {
+              final dynamic extractedResult = jsonDecode(possibleJson);
+              if (extractedResult is Map<String, dynamic>) {
+                debugPrint('RtcMessageUtils: 成功从部分文本中提取JSON');
+                return extractedResult;
+              }
+            } catch (extractError) {
+              // 提取失败，继续
+            }
+          }
+        } catch (fixError) {
+          // 修复失败，继续
+        }
+      }
+      
+      // 检查是否包含不可见字符或非UTF8字符
+      if (text.contains('\u{FFFD}')) {
+        debugPrint('RtcMessageUtils: 文本包含替换字符(U+FFFD)，可能是编码问题');
+      }
     }
     
     return null;

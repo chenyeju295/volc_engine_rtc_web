@@ -17,6 +17,7 @@ class AigcConfig {
     this.taskId,
     this.agentConfig,
     this.serverUrl,
+    this.token,
     this.config,
   });
 
@@ -25,6 +26,7 @@ class AigcConfig {
     roomId = json['RoomId'];
     taskId = json['TaskId'];
     serverUrl = json['ServerUrl'];
+    token = json['Token'];
     agentConfig = json['AgentConfig'] != null
         ? AgentConfig.fromJson(json['AgentConfig'])
         : null;
@@ -36,12 +38,13 @@ class AigcConfig {
   String? serverUrl;
   AgentConfig? agentConfig;
   Config? config;
-
+  String? token;
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{};
     map['AppId'] = appId;
     map['RoomId'] = roomId;
     map['TaskId'] = taskId;
+    map['Token'] = token;
     map['ServerUrl'] = serverUrl;
     if (agentConfig != null) {
       map['AgentConfig'] = agentConfig?.toJson();

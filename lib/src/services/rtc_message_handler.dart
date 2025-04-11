@@ -7,6 +7,9 @@ import 'package:flutter/foundation.dart';
 
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
+import 'package:rtc_aigc_plugin/src/models/models.dart';
+
+import '../../rtc_aigc_plugin.dart';
 
 /// RTC消息处理器 - 专门处理RTC二进制消息、字幕和函数调用
 class RtcMessageHandler {
@@ -29,8 +32,11 @@ class RtcMessageHandler {
       StreamController<Map<String, dynamic>>.broadcast();
 
   /// 消息历史流控制器
-  final StreamController<Map<String, dynamic>> _messageHistoryController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<List<RtcAigcMessage>> _messageHistoryController =
+      StreamController<List<RtcAigcMessage>>.broadcast();
+
+  /// 消息历史列表
+  final List<RtcAigcMessage> _messageHistory = [];
 
   /// 字幕流
   Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
@@ -43,8 +49,13 @@ class RtcMessageHandler {
       _functionCallController.stream;
 
   /// 消息历史流
-  Stream<Map<String, dynamic>> get messageHistoryStream =>
+  Stream<List<RtcAigcMessage>> get messageHistoryStream =>
       _messageHistoryController.stream;
+
+  /// 回调属性
+  void Function(Map<String, dynamic>)? onSubtitle;
+  void Function(Map<String, dynamic>)? onFunctionCall;
+  void Function(Map<String, dynamic>)? onState;
 
   /// 构造函数
   RtcMessageHandler() {
@@ -60,285 +71,199 @@ class RtcMessageHandler {
 
   /// 处理二进制消息
   void handleBinaryMessage(String userId, dynamic message) {
-    if (message == null) {
-      debugPrint('RtcMessageHandler: 消息为空');
-      return;
-    }
-
     try {
-      // 转换为Uint8List
-      final Uint8List? bytes = _toUint8List(message);
-      if (bytes == null) {
-        debugPrint('RtcMessageHandler: 无法转换消息为Uint8List');
+      debugPrint('【消息处理器】开始处理二进制消息，用户ID: $userId');
 
-        // 尝试直接作为字符串处理
-        final String messageStr = WebUtils.binaryToString(message);
-        if (messageStr.isNotEmpty) {
-          _processTextOrJson(userId, messageStr);
-        }
+      // 将消息转换为Uint8List
+      final bytes = WebUtils.binaryToUint8List(message);
+      if (bytes.isEmpty) {
+        debugPrint('【消息处理器】消息转换失败，无法处理');
         return;
       }
 
-      // 尝试解析TLV格式
-      final Map<String, dynamic>? tlvData =
-          RtcMessageUtils.parseTlvMessage(bytes);
-      if (tlvData != null) {
-        _processJsonMessage(userId, tlvData);
-        return;
+      debugPrint('【消息处理器】消息长度: ${bytes.length} 字节');
+
+      // 检查消息类型 - 查看前几个字节用于调试
+      if (bytes.length >= 4) {
+        final magicBytes = [bytes[0], bytes[1], bytes[2], bytes[3]];
+        final magicString = String.fromCharCodes(magicBytes);
+        debugPrint('【消息处理器】消息头部标识: $magicString');
       }
 
-      // 如果不是TLV格式，尝试直接转换为字符串
-      final String messageStr = WebUtils.binaryToString(message);
-      if (messageStr.isNotEmpty) {
-        _processTextOrJson(userId, messageStr);
+      // 解析TLV消息
+      final parsedTlvMessage = RtcMessageUtils.parseTlvMessage(bytes);
+      if (parsedTlvMessage != null) {
+        debugPrint('【消息处理器】TLV消息解析成功，类型: ${parsedTlvMessage["type"]}');
+        _processTextOrJson(parsedTlvMessage);
       } else {
-        debugPrint('RtcMessageHandler: 无法解析消息内容');
+        // 尝试作为字符串处理
+        final jsonString = WebUtils.binaryToString(message);
+        if (jsonString != null && jsonString.isNotEmpty) {
+          debugPrint(
+              '【消息处理器】尝试作为字符串处理: ${jsonString.substring(0, jsonString.length > 50 ? 50 : jsonString.length)}...');
+          final parsedJson = RtcMessageUtils.safeParseJson(jsonString);
+          if (parsedJson != null) {
+            debugPrint('【消息处理器】字符串JSON解析成功');
+            _processTextOrJson(parsedJson);
+          }
+        } else {
+          debugPrint('【消息处理器】消息无法解析为TLV或字符串JSON格式');
+        }
       }
-    } catch (e) {
-      debugPrint('RtcMessageHandler: 处理二进制消息出错: $e');
+    } catch (e, stackTrace) {
+      debugPrint('【消息处理器】处理二进制消息异常: $e');
+      debugPrint('堆栈: $stackTrace');
     }
   }
 
   /// 处理文本或JSON消息
-  void _processTextOrJson(String userId, String text) {
-    if (text.isEmpty) return;
-
-    // 尝试解析为JSON
+  void _processTextOrJson(Map<String, dynamic> data) {
     try {
-      final Map<String, dynamic>? jsonData =
-          RtcMessageUtils.safeParseJson(text);
-      if (jsonData != null) {
-        _processJsonMessage(userId, jsonData);
-      } else {
-        _processTextMessage(userId, text);
+      final type = data['type']?.toString().toLowerCase();
+
+      debugPrint('【消息处理器】处理消息类型: $type');
+
+      switch (type) {
+        case 'conv':
+          _handleConvMessage(data);
+          break;
+        case 'subv':
+          _handleSubtitleMessage(data);
+          break;
+        case 'func':
+          _handleFunctionCallMessage(data);
+          break;
+        default:
+          // 检查是否有state字段，某些消息使用state字段表示类型
+          if (data.containsKey('state')) {
+            _handleStateMessage(data);
+          } else {
+            debugPrint('【消息处理器】未知消息类型: $type，完整数据: $data');
+          }
       }
-    } catch (e) {
-      _processTextMessage(userId, text);
+    } catch (e, stackTrace) {
+      debugPrint('【消息处理器】处理消息异常: $e');
+      debugPrint('堆栈: $stackTrace');
     }
   }
 
-  /// 转换为Uint8List
-  Uint8List? _toUint8List(dynamic data) {
+  /// 处理对话状态消息
+  void _handleConvMessage(Map<String, dynamic> data) {
     try {
-      if (data is Uint8List) {
-        return data;
-      }
+      debugPrint('【消息处理器】处理对话状态消息: $data');
 
-      // 如果是ArrayBuffer或类似对象
-      if (js_util.hasProperty(data, 'byteLength')) {
-        // 使用Uint8Array视图
-        final uint8Array = js_util.callConstructor(
-            js_util.getProperty(js_util.globalThis, 'Uint8Array'), [data]);
+      final state = data['status']?.toString().toUpperCase();
+      if (state != null) {
+        // 处理状态更新
+        final stateData = {
+          'state': state,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        };
 
-        // 转换为Dart的Uint8List
-        final int length = js_util.getProperty(uint8Array, 'length');
-        final Uint8List result = Uint8List(length);
-
-        for (int i = 0; i < length; i++) {
-          result[i] = js_util.getProperty(uint8Array, i);
+        if (onState != null) {
+          onState!(stateData);
         }
 
-        return result;
+        // 添加到消息历史
+        _addMessage(RtcAigcMessage.status(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          status: state,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        ));
       }
     } catch (e) {
-      debugPrint('RtcMessageHandler: 转换Uint8List出错: $e');
-    }
-
-    return null;
-  }
-
-  /// 处理JSON消息
-  void _processJsonMessage(String userId, Map<String, dynamic> data) {
-    try {
-      // 检查消息类型
-      if (data.containsKey('type')) {
-        final String type = data['type'];
-
-        // 处理字幕消息
-        if (type == RtcMessageUtils.TYPE_SUBTITLE || type == 'subv') {
-          if (data.containsKey('data') && data['data'] is List) {
-            // 处理火山引擎字幕格式
-            final List<dynamic> subtitles = data['data'];
-            for (final item in subtitles) {
-              if (item is Map && item.containsKey('text')) {
-                _processSubtitleMessage(userId, {
-                  'type': RtcMessageUtils.TYPE_SUBTITLE,
-                  'text': item['text'],
-                  'isFinal': item['definite'] ?? false,
-                  'language': item['language'] ?? 'zh'
-                });
-              }
-            }
-          }
-          // _processSubtitleMessage(userId, data["data"]);
-        }
-
-        // 处理状态消息
-        else if (type == RtcMessageUtils.TYPE_STATE) {
-          _processStateMessage(userId, data);
-        }
-
-        // 处理函数调用消息
-        else if (type == RtcMessageUtils.TYPE_FUNCTION_CALL) {
-          _processFunctionCallMessage(userId, data);
-        }
-
-        // 处理其他类型消息
-        else {
-          debugPrint('RtcMessageHandler: 未知消息类型: $type');
-          _messageHistoryController.add({
-            'type': type,
-            'data': data,
-            'userId': userId,
-            'timestamp': DateTime.now().millisecondsSinceEpoch
-          });
-        }
-      } else {
-        // 检查是否可能是字幕（没有type但有text）
-        if (data.containsKey('text')) {
-          _processSubtitleMessage(userId, {
-            ...data,
-            'type': RtcMessageUtils.TYPE_SUBTITLE,
-            'isFinal': data['isFinal'] ?? true
-          });
-        }
-        // 检查是否有data数组，可能是火山引擎字幕格式
-        else if (data.containsKey('data') && data['data'] is List) {
-          // 处理火山引擎字幕格式
-          final List<dynamic> subtitles = data['data'];
-          for (final item in subtitles) {
-            if (item is Map && item.containsKey('text')) {
-              _processSubtitleMessage(userId, {
-                'type': RtcMessageUtils.TYPE_SUBTITLE,
-                'text': item['text'],
-                'isFinal': item['definite'] ?? false,
-                'language': item['language'] ?? 'zh'
-              });
-            }
-          }
-        }
-        // 检查是否可能是状态消息
-        else if (data.containsKey('state')) {
-          _processStateMessage(userId, {
-            'type': RtcMessageUtils.TYPE_STATE,
-            'state': data['state'],
-            ...data
-          });
-        } else {
-          debugPrint('RtcMessageHandler: 消息没有type字段: $data');
-          _messageHistoryController.add({
-            'type': 'unknown',
-            'data': data,
-            'userId': userId,
-            'timestamp': DateTime.now().millisecondsSinceEpoch
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('RtcMessageHandler: 处理JSON消息出错: $e');
+      debugPrint('【消息处理器】处理对话状态消息异常: $e');
     }
   }
 
   /// 处理字幕消息
-  void _processSubtitleMessage(String userId, Map<String, dynamic> data) {
+  void _handleSubtitleMessage(Map<String, dynamic> data) {
     try {
-      final String text = data['text'] ?? '';
-      if (text.isEmpty) return;
+      debugPrint('【消息处理器】处理字幕消息');
 
-      final bool isFinal = data['isFinal'] ?? data['definite'] ?? true;
-      final String language = data['language'] ?? 'zh';
+      // 提取字幕内容
+      final textData = data['text'];
+      if (textData != null) {
+        final subtitle = {
+          'text': textData,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        };
 
-      final Map<String, dynamic> subtitleData = {
-        'userId': userId,
-        'text': text,
-        'isFinal': isFinal,
-        'language': language,
-        'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch
-      };
+        if (onSubtitle != null) {
+          onSubtitle!(subtitle);
+        }
 
-      _subtitleController.add(subtitleData);
-
-      // 只有在最终版本时才添加到消息历史
-      if (isFinal) {
-        _messageHistoryController
-            .add({'type': RtcMessageUtils.TYPE_SUBTITLE, ...subtitleData});
-
-        debugPrint('RtcMessageHandler: 处理字幕: $text (最终: $isFinal)');
+        // 添加到消息历史
+        _addMessage(RtcAigcMessage.text(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: textData,
+          isUser: false,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        ));
       }
     } catch (e) {
-      debugPrint('RtcMessageHandler: 处理字幕消息出错: $e');
-    }
-  }
-
-  /// 处理状态消息
-  void _processStateMessage(String userId, Map<String, dynamic> data) {
-    try {
-      final String state = data['state'] ?? '';
-      if (state.isEmpty) return;
-
-      final Map<String, dynamic> stateData = {
-        'userId': userId,
-        'state': state,
-        'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch
-      };
-
-      _stateController.add(stateData);
-      _messageHistoryController
-          .add({'type': RtcMessageUtils.TYPE_STATE, ...stateData});
-
-      debugPrint('RtcMessageHandler: 处理状态: $state');
-    } catch (e) {
-      debugPrint('RtcMessageHandler: 处理状态消息出错: $e');
+      debugPrint('【消息处理器】处理字幕消息异常: $e');
     }
   }
 
   /// 处理函数调用消息
-  void _processFunctionCallMessage(String userId, Map<String, dynamic> data) {
+  void _handleFunctionCallMessage(Map<String, dynamic> data) {
     try {
-      final String name = data['name'] ?? '';
-      if (name.isEmpty) return;
+      debugPrint('【消息处理器】处理函数调用消息');
 
-      final Map<String, dynamic> args = data['arguments'] ?? {};
+      // 提取函数名和参数
+      final name = data['name'];
+      final args = data['arguments'];
 
-      final Map<String, dynamic> functionCallData = {
-        'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        'userId': userId,
-        'name': name,
-        'arguments': args,
-        'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch
-      };
+      if (name != null) {
+        final functionCall = {
+          'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          'name': name,
+          'arguments': args ?? {},
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        };
 
-      _functionCallController.add(functionCallData);
-      _messageHistoryController.add(
-          {'type': RtcMessageUtils.TYPE_FUNCTION_CALL, ...functionCallData});
+        if (onFunctionCall != null) {
+          onFunctionCall!(functionCall);
+        }
 
-      debugPrint('RtcMessageHandler: 处理函数调用: $name');
+        // 添加到消息历史
+        _addMessage(RtcAigcMessage.functionCall(
+          id: functionCall['id'],
+          name: name,
+          arguments: args ?? {},
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        ));
+      }
     } catch (e) {
-      debugPrint('RtcMessageHandler: 处理函数调用消息出错: $e');
+      debugPrint('【消息处理器】处理函数调用消息异常: $e');
     }
   }
 
-  /// 处理纯文本消息
-  void _processTextMessage(String userId, String text) {
-    if (text.isEmpty) return;
-
+  /// 处理状态消息
+  void _handleStateMessage(Map<String, dynamic> data) {
     try {
-      // 假设纯文本是字幕
-      final Map<String, dynamic> subtitleData = {
-        'userId': userId,
-        'text': text,
-        'isFinal': true,
-        'timestamp': DateTime.now().millisecondsSinceEpoch
-      };
+      debugPrint('【消息处理器】处理状态消息: $data');
 
-      _subtitleController.add(subtitleData);
-      _messageHistoryController
-          .add({'type': RtcMessageUtils.TYPE_SUBTITLE, ...subtitleData});
+      if (onState != null) {
+        onState!(data);
+      }
 
-      debugPrint('RtcMessageHandler: 处理纯文本字幕: $text');
+      // 添加到消息历史
+      _addMessage(RtcAigcMessage.status(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        status: data['state'] ?? 'unknown',
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      ));
     } catch (e) {
-      debugPrint('RtcMessageHandler: 处理纯文本消息出错: $e');
+      debugPrint('【消息处理器】处理状态消息异常: $e');
     }
+  }
+
+  /// 添加消息到历史记录
+  void _addMessage(RtcAigcMessage message) {
+    _messageHistory.add(message);
+    _messageHistoryController.add(_messageHistory);
   }
 
   /// 发送用户二进制消息

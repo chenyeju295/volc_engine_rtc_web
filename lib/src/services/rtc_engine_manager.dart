@@ -17,6 +17,7 @@ class RtcEngineManager {
   dynamic aigcClient;
   bool isInitialized = false;
   bool isInRoom = false;
+  RtcEventManager? _eventHandler;
 
   RtcEngineManager({required this.config});
 
@@ -101,120 +102,17 @@ class RtcEngineManager {
     }
   }
 
-  void registerEventHandlers({
-    Function(dynamic, dynamic)? onBinaryMessage,
-    Function(dynamic)? onSubtitle,
-    Function(dynamic)? onUserJoined,
-    Function(dynamic)? onUserLeave,
-    Function(dynamic)? onUserStartAudioCapture,
-    Function(dynamic)? onUserStopAudioCapture,
-    Function(dynamic)? onAutoPlayFail,
-  }) {
-    try {
-      debugPrint('【事件系统】正在注册RTC事件处理程序...');
+  /// 注册事件处理器
+  void registerEventHandler(RtcEventManager eventHandler) {
+    _eventHandler = eventHandler;
 
-      // 获取VERTC事件常量
-      final vertcObject = js_util.getProperty(js_util.globalThis, 'VERTC');
-      if (vertcObject == null) {
-        throw Exception('无法访问VERTC对象');
-      }
-
-      final events = js_util.getProperty(vertcObject, 'events');
-      if (events == null) {
-        throw Exception('无法获取VERTC事件常量');
-      }
-
-      // 注册事件回调
-      _registerEvent(events, 'onError', (dynamic e) {
-        debugPrint('【事件系统】发生错误: $e');
-      });
-
-      _registerEvent(
-          events,
-          'onUserJoined',
-          onUserJoined ??
-              (dynamic userData) {
-                debugPrint(
-                    '【事件系统】用户加入: ${userData is Map ? userData['userId'] : userData}');
-              });
-
-      _registerEvent(
-          events,
-          'onUserLeave',
-          onUserLeave ??
-              (dynamic userData) {
-                debugPrint(
-                    '【事件系统】用户离开: ${userData is Map ? userData['userId'] : userData}');
-              });
-
-      _registerEvent(
-          events,
-          'onRoomBinaryMessageReceived',
-          onBinaryMessage ??
-              (dynamic messageData) {
-                final userId =
-                    messageData is Map ? messageData['userId'] : messageData;
-                final message =
-                    messageData is Map ? messageData['message'] : null;
-                debugPrint('【事件系统】收到二进制消息: $userId');
-              });
-
-      _registerEvent(
-          events,
-          'onAutoplayFailed',
-          onAutoPlayFail ??
-              (dynamic errorData) {
-                debugPrint('【事件系统】自动播放失败: $errorData');
-              });
-
-      _registerEvent(
-          events,
-          'onUserStartAudioCapture',
-          onUserStartAudioCapture ??
-              (dynamic userData) {
-                final userId = userData is Map ? userData['userId'] : userData;
-                debugPrint('【事件系统】用户开始音频采集: $userId');
-              });
-
-      _registerEvent(
-          events,
-          'onUserStopAudioCapture',
-          onUserStopAudioCapture ??
-              (dynamic userData) {
-                final userId = userData is Map ? userData['userId'] : userData;
-                debugPrint('【事件系统】用户停止音频采集: $userId');
-              });
-
-      // 注册自定义字幕事件 - 这可能需要与您的业务逻辑匹配
-      _setupSubtitleEventHandling(onSubtitle);
-
-      debugPrint('【事件系统】RTC事件处理程序注册完成');
-    } catch (e) {
-      debugPrint('【事件系统】注册RTC事件处理程序失败: $e');
+    // 设置引擎实例
+    if (engine != null) {
+      _eventHandler?.setEngine(engine);
+      debugPrint('【引擎管理器】成功注册事件处理器，并设置引擎实例');
+    } else {
+      debugPrint('【引擎管理器】注册事件处理器失败：引擎实例为空');
     }
-  }
-
-  /// 注册单个事件
-  void _registerEvent(dynamic events, String eventName, Function callback) {
-    try {
-      final event = js_util.getProperty(events, eventName);
-      if (event == null) {
-        debugPrint('【事件系统】警告: 事件 $eventName 未找到');
-        return;
-      }
-
-      js_util.callMethod(engine, 'on', [event, js_util.allowInterop(callback)]);
-
-      debugPrint('【事件系统】已注册事件: $eventName');
-    } catch (e) {
-      debugPrint('【事件系统】注册事件失败: $eventName, 错误: $e');
-    }
-  }
-
-  /// 设置字幕事件处理
-  void _setupSubtitleEventHandling(Function(dynamic)? onSubtitle) {
-    // 这里实现您的字幕事件处理逻辑
-    // 根据您的实际业务需求可能有所不同
   }
 
   Future<bool> joinRoom(
@@ -372,22 +270,6 @@ class RtcEngineManager {
       debugPrint('【设备检查】检查权限时出错: $e');
       return {'audio': false, 'error': e.toString()};
     }
-  }
-
-  /// 注册事件处理器
-  void registerEventHandler(RtcEventManager eventManager) {
-    if (engine == null) {
-      debugPrint('【RTC引擎】无法注册事件处理器，引擎未初始化');
-      return;
-    }
-
-    debugPrint('【RTC引擎】注册事件处理器');
-
-    // 设置引擎实例到事件管理器
-    eventManager.setEngine(engine);
-
-    // 确保事件监听器在初始化引擎后、加入房间前添加
-    debugPrint('【RTC引擎】已成功将引擎实例传递给事件管理器');
   }
 
   /// 恢复音频播放（解决浏览器自动播放限制问题）

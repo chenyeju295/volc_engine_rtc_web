@@ -21,15 +21,21 @@ export 'src/config/aigc_config.dart';
 export 'src/utils/rtc_message_utils.dart';
 export 'src/utils/web_utils.dart';
 
+export 'src/services/rtc_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
 import 'package:rtc_aigc_plugin/src/config/aigc_config.dart';
 import 'package:rtc_aigc_plugin/src/models/models.dart';
-import 'package:rtc_aigc_plugin/src/services/service_manager.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_device_manager.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_engine_manager.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
+import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 
 /// RTC AIGC Plugin
 ///
@@ -82,127 +88,140 @@ import 'package:rtc_aigc_plugin/src/services/service_manager.dart';
 class RtcAigcPlugin {
   static const MethodChannel _channel = MethodChannel('rtc_aigc_plugin');
 
-  // 服务管理器实例
-  static ServiceManager? _serviceManager;
+  // RTC service instance
+  static RtcService? _rtcService;
 
   // 回调函数
-  static void Function(String state, String? message)? _onStateChange;
-  static void Function(String text, bool isUser)? _onMessage;
-  static void Function(bool isPlaying)? _onAudioStatusChange;
-  static void Function(List<dynamic> audioDevices)? _onAudioDevicesChanged;
-  static void Function(Map<String, dynamic> subtitle)? _onSubtitle;
+  static StreamSubscription? _stateSubscription;
 
-  // RTC事件回调
-  static void Function(Map<String, dynamic> data)? _onUserJoined;
-  static void Function(Map<String, dynamic> data)? _onUserLeave;
-  static void Function(Map<String, dynamic> data)? _onUserPublishStream;
-  static void Function(Map<String, dynamic> data)? _onUserUnpublishStream;
-  static void Function(Map<String, dynamic> data)? _onUserStartAudioCapture;
-  static void Function(Map<String, dynamic> data)? _onUserStopAudioCapture;
+  /// Initialize the plugin
+  static Future<bool> initialize({required AigcConfig config}) async {
+    try {
+      // Create necessary internal components
+      final engineManager = RtcEngineManager(config: config);
+      final messageHandler = RtcMessageHandler();
+      final eventManager = RtcEventManager(messageHandler: messageHandler);
+      final deviceManager = RtcDeviceManager(engineManager: engineManager);
 
-  // 事件控制器
-  static final StreamController<Map<String, dynamic>> _userJoinedController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>> _userLeaveController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>>
-      _userPublishStreamController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>>
-      _userUnpublishStreamController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>>
-      _userStartAudioCaptureController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>>
-      _userStopAudioCaptureController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  static final StreamController<Map<String, dynamic>> _playerEventController =
-      StreamController<Map<String, dynamic>>.broadcast();
+      // Create RtcService
+      _rtcService = RtcService(
+        config: config,
+        engineManager: engineManager,
+        deviceManager: deviceManager,
+        eventManager: eventManager,
+        messageHandler: messageHandler,
+      );
+
+      debugPrint('Initialize RTC AIGC plugin');
+      final success = await _rtcService!.initialize();
+      return success;
+    } catch (e) {
+      debugPrint('Failed to initialize RTC AIGC plugin: $e');
+      return false;
+    }
+  }
+
+  /// Get RtcService instance
+  static RtcService? get rtcService => _rtcService;
+
+  /// Clean up resources
+  static Future<void> dispose() async {
+    try {
+      if (_rtcService != null) {
+        await _rtcService!.dispose();
+        _rtcService = null;
+      }
+
+      if (_stateSubscription != null) {
+        await _stateSubscription!.cancel();
+        _stateSubscription = null;
+      }
+    } catch (e) {
+      debugPrint('Error during dispose: $e');
+    }
+  }
 
   /// ---------- 字幕和消息相关流 ----------
 
   /// 用于监听字幕变化的流
   static Stream<Map<String, dynamic>> get subtitleStream =>
-      _serviceManager?.rtcService.subtitleStream ??
-      const Stream<Map<String, dynamic>>.empty();
+      _rtcService?.subtitleStream ?? const Stream<Map<String, dynamic>>.empty();
 
   /// 用于监听字幕状态变化的流
   static Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _serviceManager?.onSubtitleStateChanged ??
-      const Stream<Map<String, dynamic>>.empty();
+      _rtcService?.subtitleStream ?? const Stream<Map<String, dynamic>>.empty();
 
   /// 用于监听消息历史变化的流
   static Stream<List<RtcAigcMessage>> get messageHistoryStream =>
-      _serviceManager?.onMessageHistoryChanged ??
+      _rtcService?.messageHistoryStream ??
       const Stream<List<RtcAigcMessage>>.empty();
 
   /// 用于获取消息历史
   static List<RtcAigcMessage> get messageHistory =>
-      _serviceManager?.messageHistory ?? [];
+      _rtcService?.getMessageHistory() ?? [];
 
   /// ---------- 音频相关流 ----------
 
   /// 用于监听音频状态变化的流
   static Stream<bool> get audioStatusStream =>
-      _serviceManager?.rtcService.audioStatusStream ??
-      const Stream<bool>.empty();
+      _rtcService?.audioStatusStream ?? const Stream<bool>.empty();
 
   /// 用于监听音频属性变化的流 (音量等)
   static Stream<Map<String, dynamic>> get audioPropertiesStream =>
-      _serviceManager?.onAudioPropertiesChanged ??
+      _rtcService?.localAudioPropertiesStream ??
       const Stream<Map<String, dynamic>>.empty();
-
-  /// 播放器事件流
-  static Stream<Map<String, dynamic>> get playerEventStream =>
-      _playerEventController.stream;
 
   /// ---------- 状态和设备相关流 ----------
 
   /// 用于监听AI状态变化的流
   static Stream<RtcState> get stateStream =>
-      _serviceManager?.rtcService.stateStream ?? const Stream<RtcState>.empty();
+      _rtcService?.stateStream ?? const Stream<RtcState>.empty();
 
   /// 用于监听连接状态变化的流
   static Stream<RtcConnectionState> get connectionStateStream =>
-      _serviceManager?.rtcService.connectionStateStream ??
+      _rtcService?.connectionStateStream ??
       const Stream<RtcConnectionState>.empty();
 
   /// 用于监听设备变化的流
   static Stream<bool> get deviceStateStream =>
-      _serviceManager?.rtcService.deviceStateStream ??
-      const Stream<bool>.empty();
+      _rtcService?.deviceStateStream ?? const Stream<bool>.empty();
 
   /// 用于监听网络质量变化的流
   static Stream<Map<String, dynamic>> get networkQualityStream =>
-      _serviceManager?.onNetworkQualityChanged ??
+      _rtcService?.networkQualityStream ??
       const Stream<Map<String, dynamic>>.empty();
 
   /// ---------- RTC用户事件相关流 ----------
 
   /// 用户加入事件流
   static Stream<Map<String, dynamic>> get userJoinedStream =>
-      _userJoinedController.stream;
+      _rtcService?.userJoinedStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用户离开事件流
   static Stream<Map<String, dynamic>> get userLeaveStream =>
-      _userLeaveController.stream;
+      _rtcService?.userLeaveStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用户发布流事件流
   static Stream<Map<String, dynamic>> get userPublishStreamStream =>
-      _userPublishStreamController.stream;
+      _rtcService?.userPublishStreamStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用户取消发布流事件流
   static Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
-      _userUnpublishStreamController.stream;
+      _rtcService?.userUnpublishStreamStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用户开始音频采集事件流
   static Stream<Map<String, dynamic>> get userStartAudioCaptureStream =>
-      _userStartAudioCaptureController.stream;
+      _rtcService?.userStartAudioCaptureStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// 用户停止音频采集事件流
   static Stream<Map<String, dynamic>> get userStopAudioCaptureStream =>
-      _userStopAudioCaptureController.stream;
+      _rtcService?.userStopAudioCaptureStream ??
+      const Stream<Map<String, dynamic>>.empty();
 
   /// Register this plugin
   static void registerWith(Registrar registrar) {
@@ -222,283 +241,49 @@ class RtcAigcPlugin {
     switch (call.method) {
       case 'onUserJoined':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserJoined != null) {
-          _onUserJoined!(data);
+        if (_rtcService?.onUserJoined != null) {
+          _rtcService!.onUserJoined!(data);
         }
-        _userJoinedController.add(data);
         return;
 
       case 'onUserLeave':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserLeave != null) {
-          _onUserLeave!(data);
+        if (_rtcService?.onUserLeave != null) {
+          _rtcService!.onUserLeave!(data);
         }
-        _userLeaveController.add(data);
         return;
 
       case 'onUserPublishStream':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserPublishStream != null) {
-          _onUserPublishStream!(data);
+        if (_rtcService?.onUserPublishStream != null) {
+          _rtcService!.onUserPublishStream!(data);
         }
-        _userPublishStreamController.add(data);
         return;
 
       case 'onUserUnpublishStream':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserUnpublishStream != null) {
-          _onUserUnpublishStream!(data);
+        if (_rtcService?.onUserUnpublishStream != null) {
+          _rtcService!.onUserUnpublishStream!(data);
         }
-        _userUnpublishStreamController.add(data);
         return;
 
       case 'onUserStartAudioCapture':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserStartAudioCapture != null) {
-          _onUserStartAudioCapture!(data);
+        if (_rtcService?.onUserStartAudioCapture != null) {
+          _rtcService!.onUserStartAudioCapture!(data);
         }
-        _userStartAudioCaptureController.add(data);
         return;
 
       case 'onUserStopAudioCapture':
         final data = Map<String, dynamic>.from(call.arguments);
-        if (_onUserStopAudioCapture != null) {
-          _onUserStopAudioCapture!(data);
+        if (_rtcService?.onUserStopAudioCapture != null) {
+          _rtcService!.onUserStopAudioCapture!(data);
         }
-        _userStopAudioCaptureController.add(data);
         return;
 
       default:
         return;
     }
-  }
-
-  /// 设置事件监听器
-  static void _setupEventListeners() {
-    if (_serviceManager == null) return;
-
-    // 监听用户相关事件
-    _serviceManager!.rtcService.eventManager.userJoinStream.listen((userId) {
-      debugPrint('【RTC Plugin】用户加入: $userId');
-      final data = {'userId': userId};
-      _userJoinedController.add(data);
-
-      if (_onUserJoined != null) {
-        _onUserJoined!(data);
-      }
-    });
-
-    _serviceManager!.rtcService.eventManager.userLeaveStream.listen((userId) {
-      debugPrint('【RTC Plugin】用户离开: $userId');
-      final data = {'userId': userId};
-      _userLeaveController.add(data);
-
-      if (_onUserLeave != null) {
-        _onUserLeave!(data);
-      }
-    });
-
-    _serviceManager!.rtcService.userPublishStreamStream.listen((data) {
-      debugPrint('【RTC Plugin】用户发布流事件: $data');
-      _userPublishStreamController.add(data);
-
-      if (_onUserPublishStream != null) {
-        _onUserPublishStream!(data);
-      }
-    });
-
-    _serviceManager!.rtcService.eventManager.userStartAudioCaptureStream
-        .listen((userId) {
-      debugPrint('【RTC Plugin】用户开始音频采集: $userId');
-      final data = {'userId': userId};
-      _userStartAudioCaptureController.add(data);
-
-      if (_onUserStartAudioCapture != null) {
-        _onUserStartAudioCapture!(data);
-      }
-    });
-
-    _serviceManager!.rtcService.eventManager.playerEventStream.listen((data) {
-      debugPrint('【RTC Plugin】播放器事件: $data');
-      _playerEventController.add(data);
-    });
-  }
-
-  /// Initialize the plugin
-  static Future<bool> initialize({
-    required String appId,
-    required String roomId,
-    required String userId,
-    required String token,
-    required String taskId,
-    required String serverUrl,
-    AsrConfig? asrConfig,
-    TtsConfig? ttsConfig,
-    LlmConfig? llmConfig,
-    AigcConfig? aigcConfig,
-    void Function(String state, String? message)? onStateChange,
-    void Function(String text, bool isUser)? onMessage,
-    void Function(bool isPlaying)? onAudioStatusChange,
-    void Function(List<dynamic> audioDevices)? onAudioDevicesChanged,
-    void Function(Map<String, dynamic> subtitle)? onSubtitle,
-    void Function(Map<String, dynamic> data)? onUserJoined,
-    void Function(Map<String, dynamic> data)? onUserLeave,
-    void Function(Map<String, dynamic> data)? onUserPublishStream,
-    void Function(Map<String, dynamic> data)? onUserUnpublishStream,
-    void Function(Map<String, dynamic> data)? onUserStartAudioCapture,
-    void Function(Map<String, dynamic> data)? onUserStopAudioCapture,
-  }) async {
-    try {
-      // 确保Flutter binding已初始化
-      WidgetsFlutterBinding.ensureInitialized();
-
-      // 参数验证
-      if (appId.isEmpty) {
-        debugPrint('RtcAigcPlugin initialize error: AppID不能为空');
-        return false;
-      }
-
-      if (roomId.isEmpty) {
-        debugPrint('RtcAigcPlugin initialize error: RoomID不能为空');
-        return false;
-      }
-
-      if (userId.isEmpty) {
-        debugPrint('RtcAigcPlugin initialize error: UserID不能为空');
-        return false;
-      }
-
-      if (token.isEmpty) {
-        debugPrint('RtcAigcPlugin initialize error: Token不能为空');
-        return false;
-      }
-
-      // 存储回调
-      _onStateChange = onStateChange;
-      _onMessage = onMessage;
-      _onAudioStatusChange = onAudioStatusChange;
-      _onAudioDevicesChanged = onAudioDevicesChanged;
-      _onSubtitle = onSubtitle;
-      _onUserJoined = onUserJoined;
-      _onUserLeave = onUserLeave;
-      _onUserPublishStream = onUserPublishStream;
-      _onUserUnpublishStream = onUserUnpublishStream;
-      _onUserStartAudioCapture = onUserStartAudioCapture;
-      _onUserStopAudioCapture = onUserStopAudioCapture;
-
-      if (kIsWeb) {
-        // 创建服务管理器
-        _serviceManager = ServiceManager(config: aigcConfig!);
-
-        // 设置回调
-        _serviceManager!.setOnStateChange((state, message) {
-          debugPrint('状态变化: $state, $message');
-          if (_onStateChange != null) {
-            _onStateChange!(state, message);
-          }
-        });
-
-        if (_onMessage != null) {
-          _serviceManager!.setOnMessage((message) {
-            _onMessage!(message.text ?? '', message.isUser ?? false);
-          });
-        }
-
-        if (_onAudioStatusChange != null) {
-          _serviceManager!.setOnAudioStatusChange(_onAudioStatusChange!);
-        }
-
-        if (_onAudioDevicesChanged != null) {
-          _serviceManager!.setOnAudioDevicesChange(_onAudioDevicesChanged!);
-        }
-
-        if (_onSubtitle != null) {
-          _serviceManager!.setOnSubtitle(_onSubtitle!);
-        }
-
-        // 初始化服务
-        final success = await _serviceManager!.initialize();
-
-        if (success) {
-          // 设置事件监听器
-          _setupEventListeners();
-        }
-
-        return success;
-      } else {
-        // 非Web平台使用方法通道
-        final Map<String, dynamic> arguments = {
-          'appId': appId,
-          'roomId': roomId,
-          'userId': userId,
-          'token': token,
-          'taskId': taskId,
-          'serverUrl': serverUrl,
-          if (asrConfig != null) 'asrConfig': asrConfig,
-          if (ttsConfig != null) 'ttsConfig': ttsConfig,
-          if (llmConfig != null) 'llmConfig': llmConfig,
-          if (aigcConfig != null) 'aigcConfig': aigcConfig.toJson(),
-        };
-
-        final result = await _channel.invokeMethod('initialize', arguments);
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
-      }
-    } catch (e) {
-      debugPrint('Error initializing plugin: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to initialize plugin: $e');
-      }
-      return false;
-    }
-  }
-
-  /// Initialize using AigcConfig
-  static Future<bool> initializeWithAigcConfig({
-    required AigcConfig aigcConfig,
-    required String token,
-    required String userId,
-    required String serverUrl,
-    void Function(String state, String? message)? onStateChange,
-    void Function(String text, bool isUser)? onMessage,
-    void Function(bool isPlaying)? onAudioStatusChange,
-    void Function(List<dynamic> audioDevices)? onAudioDevicesChanged,
-    void Function(Map<String, dynamic> subtitle)? onSubtitle,
-    void Function(Map<String, dynamic> data)? onUserJoined,
-    void Function(Map<String, dynamic> data)? onUserLeave,
-    void Function(Map<String, dynamic> data)? onUserPublishStream,
-    void Function(Map<String, dynamic> data)? onUserUnpublishStream,
-    void Function(Map<String, dynamic> data)? onUserStartAudioCapture,
-    void Function(Map<String, dynamic> data)? onUserStopAudioCapture,
-  }) async {
-    if (aigcConfig.appId == null ||
-        aigcConfig.roomId == null ||
-        aigcConfig.taskId == null) {
-      debugPrint('RtcAigcPlugin initialize error: AigcConfig 缺少必要的参数');
-      return false;
-    }
-
-    return initialize(
-      appId: aigcConfig.appId!,
-      roomId: aigcConfig.roomId!,
-      userId: userId,
-      taskId: aigcConfig.taskId!,
-      token: token,
-      serverUrl: serverUrl,
-      aigcConfig: aigcConfig,
-      onStateChange: onStateChange,
-      onMessage: onMessage,
-      onAudioStatusChange: onAudioStatusChange,
-      onAudioDevicesChanged: onAudioDevicesChanged,
-      onSubtitle: onSubtitle,
-      onUserJoined: onUserJoined,
-      onUserLeave: onUserLeave,
-      onUserPublishStream: onUserPublishStream,
-      onUserUnpublishStream: onUserUnpublishStream,
-      onUserStartAudioCapture: onUserStartAudioCapture,
-      onUserStopAudioCapture: onUserStopAudioCapture,
-    );
   }
 
   /// Join an RTC room
@@ -508,16 +293,14 @@ class RtcAigcPlugin {
     required String token,
   }) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.joinRoom(
-            roomId: roomId ?? _serviceManager!.config.roomId!,
-            userId: userId ?? _serviceManager!.config.agentConfig!.userId!,
-            token: token);
+      if (_rtcService != null) {
+        return await _rtcService!
+            .joinRoom(roomId: roomId, userId: userId, token: token);
       } else {
         final Map<String, dynamic> arguments = {
-          if (roomId != null) 'roomId': roomId,
-          if (userId != null) 'userId': userId,
-          if (token != null) 'token': token,
+          'roomId': roomId,
+          'userId': userId,
+          'token': token,
         };
 
         final result = await _channel.invokeMethod('joinRoom', arguments);
@@ -527,8 +310,8 @@ class RtcAigcPlugin {
       }
     } catch (e) {
       debugPrint('Error joining room: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to join room: $e');
+      if (_rtcService?.onStateChange != null) {
+        _rtcService!.onStateChange!('error', 'Failed to join room: $e');
       }
       return false;
     }
@@ -539,8 +322,8 @@ class RtcAigcPlugin {
     String? welcomeMessage,
   }) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.startConversation();
+      if (_rtcService != null) {
+        return await _rtcService!.startConversation();
       } else {
         final Map<String, dynamic> arguments = {
           if (welcomeMessage != null) 'welcomeMessage': welcomeMessage,
@@ -554,8 +337,9 @@ class RtcAigcPlugin {
       }
     } catch (e) {
       debugPrint('Error starting conversation: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to start conversation: $e');
+      if (_rtcService?.onStateChange != null) {
+        _rtcService!.onStateChange!(
+            'error', 'Failed to start conversation: $e');
       }
       return false;
     }
@@ -564,8 +348,8 @@ class RtcAigcPlugin {
   /// Leave the RTC room
   static Future<bool> leaveRoom() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.leaveRoom();
+      if (_rtcService != null) {
+        return await _rtcService!.leaveRoom();
       } else {
         final result = await _channel.invokeMethod('leaveRoom');
         return result is bool
@@ -574,8 +358,8 @@ class RtcAigcPlugin {
       }
     } catch (e) {
       debugPrint('Error leaving room: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to leave room: $e');
+      if (_rtcService?.onStateChange != null) {
+        _rtcService!.onStateChange!('error', 'Failed to leave room: $e');
       }
       return false;
     }
@@ -584,8 +368,8 @@ class RtcAigcPlugin {
   /// Stop the current conversation
   static Future<bool> stopConversation() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.stopConversation();
+      if (_rtcService != null) {
+        return await _rtcService!.stopConversation();
       } else {
         final result = await _channel.invokeMethod('stopConversation');
         return result is bool
@@ -594,8 +378,8 @@ class RtcAigcPlugin {
       }
     } catch (e) {
       debugPrint('Error stopping conversation: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to stop conversation: $e');
+      if (_rtcService?.onStateChange != null) {
+        _rtcService!.onStateChange!('error', 'Failed to stop conversation: $e');
       }
       return false;
     }
@@ -604,8 +388,8 @@ class RtcAigcPlugin {
   /// 设置音频输入设备
   static Future<bool> setAudioInputDevice(String deviceId) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.setAudioInputDevice(deviceId);
+      if (_rtcService != null) {
+        return await _rtcService!.setAudioCaptureDevice(deviceId);
       } else {
         final result = await _channel
             .invokeMethod('setAudioInputDevice', {'deviceId': deviceId});
@@ -622,8 +406,8 @@ class RtcAigcPlugin {
   /// 设置音频输出设备
   static Future<bool> setAudioOutputDevice(String deviceId) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.setAudioOutputDevice(deviceId);
+      if (_rtcService != null) {
+        return await _rtcService!.setAudioPlaybackDevice(deviceId);
       } else {
         final result = await _channel
             .invokeMethod('setAudioOutputDevice', {'deviceId': deviceId});
@@ -640,8 +424,8 @@ class RtcAigcPlugin {
   /// 发送文本消息给AI
   static Future<bool> sendMessage(String message) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.sendMessage(message);
+      if (_rtcService != null) {
+        return await _rtcService!.sendTextMessage(message);
       } else {
         final result =
             await _channel.invokeMethod('sendMessage', {'message': message});
@@ -664,8 +448,8 @@ class RtcAigcPlugin {
   /// Interrupt the current AI response
   static Future<bool> interruptConversation() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.interruptConversation();
+      if (_rtcService != null) {
+        return await _rtcService!.interruptConversation();
       } else {
         final result = await _channel.invokeMethod('interruptConversation');
         return result is bool
@@ -674,8 +458,9 @@ class RtcAigcPlugin {
       }
     } catch (e) {
       debugPrint('Error interrupting conversation: $e');
-      if (_onStateChange != null) {
-        _onStateChange!('error', 'Failed to interrupt conversation: $e');
+      if (_rtcService?.onStateChange != null) {
+        _rtcService!.onStateChange!(
+            'error', 'Failed to interrupt conversation: $e');
       }
       return false;
     }
@@ -684,8 +469,9 @@ class RtcAigcPlugin {
   /// Get available audio input devices (microphones)
   static Future<List<Map<String, String>>> getAudioInputDevices() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.getAudioInputDevices();
+      if (_rtcService != null) {
+        final devices = await _rtcService!.getAudioInputDevices();
+        return devices.map((e) => Map<String, String>.from(e)).toList();
       } else {
         final result = await _channel.invokeMethod('getAudioInputDevices');
 
@@ -708,8 +494,9 @@ class RtcAigcPlugin {
   /// Get available audio output devices (speakers)
   static Future<List<Map<String, String>>> getAudioOutputDevices() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.getAudioOutputDevices();
+      if (_rtcService != null) {
+        final devices = await _rtcService!.getAudioOutputDevices();
+        return devices.map((e) => Map<String, String>.from(e)).toList();
       } else {
         final result = await _channel.invokeMethod('getAudioOutputDevices');
 
@@ -732,8 +519,8 @@ class RtcAigcPlugin {
   /// Get the current audio input device ID
   static Future<String?> getCurrentAudioInputDevice() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return _serviceManager!.rtcService.getCurrentAudioInputDeviceId();
+      if (_rtcService != null) {
+        return await _rtcService!.getCurrentAudioInputDeviceId();
       } else {
         return await _channel.invokeMethod('getCurrentAudioInputDevice');
       }
@@ -746,8 +533,8 @@ class RtcAigcPlugin {
   /// Get the current audio output device ID
   static Future<String?> getCurrentAudioOutputDevice() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return _serviceManager!.rtcService.getCurrentAudioOutputDeviceId();
+      if (_rtcService != null) {
+        return await _rtcService!.getCurrentAudioOutputDeviceId();
       } else {
         return await _channel.invokeMethod('getCurrentAudioOutputDevice');
       }
@@ -760,8 +547,8 @@ class RtcAigcPlugin {
   /// Request access to microphone
   static Future<Map<String, dynamic>> requestMicrophoneAccess() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        final success = await _serviceManager!.requestMicrophoneAccess();
+      if (_rtcService != null) {
+        final success = await _rtcService!.requestCameraAccess();
         return {'success': success};
       } else {
         final result = await _channel.invokeMethod('requestMicrophoneAccess');
@@ -776,8 +563,8 @@ class RtcAigcPlugin {
   /// 开始音频采集
   static Future<bool> startAudioCapture({String? deviceId}) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.startAudioCapture(deviceId);
+      if (_rtcService != null) {
+        return await _rtcService!.startAudioCapture(deviceId);
       } else {
         final result = await _channel
             .invokeMethod('startAudioCapture', {'deviceId': deviceId});
@@ -794,8 +581,8 @@ class RtcAigcPlugin {
   /// 停止音频采集
   static Future<bool> stopAudioCapture() async {
     try {
-      if (kIsWeb && _serviceManager != null) {
-        return await _serviceManager!.stopAudioCapture();
+      if (_rtcService != null) {
+        return await _rtcService!.stopAudioCapture();
       } else {
         final result = await _channel.invokeMethod('stopAudioCapture');
         return result is bool
@@ -808,55 +595,15 @@ class RtcAigcPlugin {
     }
   }
 
-  /// Dispose the plugin and release all resources
-  static Future<bool> dispose() async {
-    try {
-      if (kIsWeb && _serviceManager != null) {
-        // 销毁服务管理器
-        await _serviceManager!.dispose();
-        _serviceManager = null;
-      } else {
-        await _channel.invokeMethod('dispose');
-      }
-
-      // 清除回调
-      _onStateChange = null;
-      _onMessage = null;
-      _onAudioStatusChange = null;
-      _onAudioDevicesChanged = null;
-      _onSubtitle = null;
-      _onUserJoined = null;
-      _onUserLeave = null;
-      _onUserPublishStream = null;
-      _onUserUnpublishStream = null;
-      _onUserStartAudioCapture = null;
-      _onUserStopAudioCapture = null;
-
-      // 关闭事件控制器
-      await _userJoinedController.close();
-      await _userLeaveController.close();
-      await _userPublishStreamController.close();
-      await _userUnpublishStreamController.close();
-      await _userStartAudioCaptureController.close();
-      await _userStopAudioCaptureController.close();
-      await _playerEventController.close();
-
-      return true;
-    } catch (e) {
-      debugPrint('Error disposing plugin: $e');
-      return false;
-    }
-  }
-
   /// 静音/取消静音
   static Future<bool> muteAudio(bool mute) async {
     try {
-      if (kIsWeb && _serviceManager != null) {
+      if (_rtcService != null) {
         // 通过停止/开始音频采集来实现静音
         if (mute) {
-          return await _serviceManager!.stopAudioCapture();
+          return await _rtcService!.stopAudioCapture();
         } else {
-          return await _serviceManager!.startAudioCapture(null);
+          return await _rtcService!.startAudioCapture(null);
         }
       } else {
         final result = await _channel.invokeMethod('muteAudio', {'mute': mute});

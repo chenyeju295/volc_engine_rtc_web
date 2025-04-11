@@ -111,7 +111,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       final aigcConfig = AigcConfig(
         appId: '67eb953062b4b601a6df1348', // 替换为您的 APP ID
         roomId: 'room1',
-        taskId: 'user1', serverUrl: 'http://localhost:3001',
+        taskId: 'user1',
+        token:
+            '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
+
+        serverUrl: 'http://localhost:3001',
         agentConfig: AgentConfig(
           userId: 'RobotMan_',
           welcomeMessage: '你好，我是你的AI小助手，有什么可以帮你的吗？',
@@ -148,22 +152,8 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
 
       // 使用 AigcConfig 初始化插件
-      final success = await RtcAigcPlugin.initializeWithAigcConfig(
-        aigcConfig: aigcConfig,
-        userId: 'user1',
-        token:
-            '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
-        serverUrl: "http://localhost:3001",
-        onStateChange: _handleStateChange,
-        onMessage: _handleMessage,
-        onAudioStatusChange: _handleAudioStatusChange,
-        onSubtitle: _handleSubtitle,
-        onUserJoined: _handleUserJoined,
-        onUserLeave: _handleUserLeave,
-        onUserPublishStream: _handleUserPublishStream,
-        onUserUnpublishStream: _handleUserUnpublishStream,
-        onUserStartAudioCapture: _handleUserStartAudioCapture,
-        onUserStopAudioCapture: _handleUserStopAudioCapture,
+      final success = await RtcAigcPlugin.initialize(
+        config: aigcConfig,
       );
 
       if (success) {

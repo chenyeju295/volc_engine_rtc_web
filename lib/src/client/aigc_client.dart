@@ -124,13 +124,20 @@ class AigcClient {
         body: jsonEncode(params),
       );
 
-      // 解析响应
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      debugPrint('[AigcClient] 接收响应: ${response.statusCode}');
-      debugPrint('[AigcClient] 响应数据: ${jsonEncode(responseData)}');
+      try {
+        // 解析响应
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        debugPrint('[AigcClient] 接收响应: ${response.statusCode}');
+        debugPrint('[AigcClient] 响应数据: ${jsonEncode(responseData)}');
 
-      // 处理响应结果
-      return _handleResponse(responseData, action);
+        // 处理响应结果
+        return _handleResponse(responseData, action);
+      } catch (parseError) {
+        debugPrint('[AigcClient] 解析响应JSON出错: $parseError');
+        debugPrint('[AigcClient] 原始响应内容: ${response.body}');
+        _setState(AigcClientState.error);
+        throw Exception('解析响应JSON出错: $parseError，原始内容: ${response.body.substring(0, min(100, response.body.length))}...');
+      }
     } catch (e) {
       debugPrint('[AigcClient] 请求错误: $e');
       _setState(AigcClientState.error);
@@ -152,15 +159,38 @@ class AigcClient {
       );
     }
 
-    // 检查结果
-    if (response.containsKey('Result') && response['Result'] == 'ok') {
-      return response;
-    } else if (response.containsKey('Data')) {
-      return response;
+    // 根据不同Action类型处理不同响应格式
+    if (action == ActionType.startVoiceChat) {
+      // 处理StartVoiceChat特定响应格式
+      if (response.containsKey('Result')) {
+        String result = response['Result'];
+        
+        // 任务已经开始的消息是正常的
+        if (result.contains('The task has been started')) {
+          debugPrint('[AigcClient] 任务已经启动，这是正常的响应');
+          return response;
+        } else if (result == 'ok') {
+          return response;
+        }
+      }
+      
+      // 有Data字段的情况
+      if (response.containsKey('Data')) {
+        return response;
+      }
     } else {
-      _setState(AigcClientState.error);
-      throw Exception('未知响应格式: ${jsonEncode(response)}');
+      // 其他Action类型的响应处理
+      if (response.containsKey('Result') && response['Result'] == 'ok') {
+        return response;
+      } else if (response.containsKey('Data')) {
+        return response;
+      }
     }
+    
+    // 未知响应格式时的处理（不修改状态，只记录警告）
+    // 注：移除直接抛出异常，以更宽容地处理各种响应格式
+    debugPrint('[AigcClient] 警告：未知响应格式，但将继续处理: ${jsonEncode(response)}');
+    return response;
   }
 
   /// 断开AIGC服务连接
@@ -176,7 +206,11 @@ class AigcClient {
       _isConnected = false;
       _setState(AigcClientState.initial);
 
-      return result['Result'] == 'ok';
+      // 对于特定响应格式，我们需要更灵活地处理
+      if (result.containsKey('Result')) {
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[AigcClient] 断开连接失败: $e');
       _setState(AigcClientState.error);
@@ -198,6 +232,7 @@ class AigcClient {
         type: MessageType.user,
         senderId: config.agentConfig?.userId,
         timestamp: DateTime.now().millisecondsSinceEpoch,
+        text: text, // 添加文本内容到消息
       );
       _addMessage(userMessage);
 
@@ -219,7 +254,11 @@ class AigcClient {
         params: params,
       );
 
-      return result['Result'] == 'ok';
+      // 更灵活地处理成功响应
+      if (result.containsKey('Result')) {
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[AigcClient] 发送消息失败: $e');
       _setState(AigcClientState.error);
@@ -263,7 +302,11 @@ class AigcClient {
       // 更新状态为准备就绪
       _setState(AigcClientState.ready);
 
-      return result['Result'] == 'ok';
+      // 更灵活地处理成功响应
+      if (result.containsKey('Result')) {
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[AigcClient] 取消响应失败: $e');
       return false;
@@ -275,15 +318,26 @@ class AigcClient {
     String? businessId,
     String? welcomeMessage,
   }) async {
-    _isConnected = true;
-    // 使用与Web Demo一致的参数结构
-    final Map<String, dynamic> params = config.toJson();
+    try {
+      _isConnected = true;
+      // 使用与Web Demo一致的参数结构
+      final Map<String, dynamic> params = config.toJson();
 
-    return _post(
-      action: ActionType.startVoiceChat,
-      name: 'start',
-      params: params,
-    );
+      final result = await _post(
+        action: ActionType.startVoiceChat,
+        name: 'start',
+        params: params,
+      );
+      
+      // 如果成功启动，则更新状态为就绪
+      _setState(AigcClientState.ready);
+      
+      return result;
+    } catch (e) {
+      _isConnected = false;
+      _setState(AigcClientState.error);
+      rethrow;
+    }
   }
 
   /// 更新语音对话
