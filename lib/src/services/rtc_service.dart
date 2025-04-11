@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
+import 'package:rtc_aigc_plugin/src/config/aigc_config.dart';
+
 import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_engine_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_device_manager.dart';
@@ -44,7 +46,7 @@ typedef RtcUserPublishStreamCallback = void Function(Map<String, dynamic> data);
 /// RTC服务 - 提供统一的接口用于RTC相关操作
 class RtcService {
   /// 配置信息
-  final RtcConfig _config;
+  final AigcConfig _config;
 
   /// 引擎管理器
   final RtcEngineManager _engineManager;
@@ -176,7 +178,7 @@ class RtcService {
 
   /// 构造函数
   RtcService({
-    required RtcConfig config,
+    required AigcConfig config,
     required RtcEngineManager engineManager,
     required RtcDeviceManager deviceManager,
     required RtcEventManager eventManager,
@@ -245,16 +247,8 @@ class RtcService {
     try {
       // 初始化AIGC客户端
       _aigcClient = AigcClient(
-        baseUrl: _config.serverUrl ?? '',
-        appId: _config.appId,
-        asrConfig: _config.asrConfig,
-        ttsConfig: _config.ttsConfig,
-        llmConfig: _config.llmConfig,
-        roomId: _config.roomId,
-        userId: _config.userId,
-        token: _config.token,
-        taskId: _config.taskId,
-      );
+          baseUrl: _config.serverUrl ?? 'http://localhost:3001',
+          config: _config);
 
       // 注册事件监听
       _registerEventListeners();
@@ -777,7 +771,7 @@ class RtcService {
       final userMessage = RtcAigcMessage.user(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         text: message,
-        senderId: _config.userId,
+        senderId: _config.agentConfig?.userId,
       );
 
       // 添加到历史记录
@@ -788,7 +782,7 @@ class RtcService {
         _aigcClient!.sendMessage(message);
         return true;
       }
-      
+
       return false;
     } catch (e) {
       debugPrint('Error sending message: $e');

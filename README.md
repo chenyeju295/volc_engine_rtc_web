@@ -52,7 +52,7 @@ Before using this plugin, you need to obtain the following credentials from the 
 
 ### Initialize the Plugin
 
-Initialize the plugin with your credentials and register callbacks for events:
+You can initialize the plugin using individual configuration parameters:
 
 ```dart
 await RtcAigcPlugin.initialize(
@@ -60,17 +60,93 @@ await RtcAigcPlugin.initialize(
   roomId: 'test_room',
   userId: 'test_user',
   token: 'your_rtc_token',
-  asrAppId: 'your_asr_app_id',
-  ttsAppId: 'your_tts_app_id',
   serverUrl: 'https://your-server.com',
-  arkModelId: 'your_ark_model_id',
-  onUserSpeechRecognized: (text) {
-    print('User said: $text');
+  asrConfig: AsrConfig(
+    appId: 'your_asr_app_id',
+    cluster: 'volcengine_streaming_common',
+  ),
+  ttsConfig: TtsConfig(
+    appId: 'your_tts_app_id',
+    voiceType: 'volcano_tts',
+  ),
+  llmConfig: LlmConfig(
+    modelName: 'ArkV3',
+    endPointId: 'your_ark_model_id',
+    maxTokens: 1024,
+    temperature: 0.1,
+    topP: 0.3,
+    systemMessages: ["你是AI助手，善于帮助用户解决问题。"],
+  ),
+  onStateChange: (state, message) {
+    print('State changed: $state, $message');
   },
-  onAiResponseReceived: (text) {
-    print('AI responded: $text');
+  onMessage: (text, isUser) {
+    print('${isUser ? "User" : "AI"} message: $text');
   },
-  onSpeechStateChanged: (isActive) {
+  onAudioStatusChange: (isActive) {
+    print('AI is speaking: $isActive');
+  },
+);
+```
+
+### Initialize with AigcConfig
+
+Alternatively, you can use the `AigcConfig` class for more comprehensive configuration:
+
+```dart
+// Create AIGC configuration
+final aigcConfig = AigcConfig(
+  appId: 'your_app_id',
+  roomId: 'room1',
+  taskId: 'task1',
+  agentConfig: AgentConfig(
+    userId: 'RobotMan_',
+    welcomeMessage: '你好，我是你的AI小助手，有什么可以帮你的吗？',
+    enableConversationStateCallback: true,
+    serverMessageSignatureForRTS: 'conversation',
+    targetUserId: ['user1'],
+  ),
+  config: Config(
+    lLMConfig: LlmConfig(
+      mode: 'ArkV3',
+      endPointId: 'your_endpoint_id',
+      maxTokens: 1024,
+      temperature: 0.1,
+      topP: 0.3,
+      systemMessages: ["你是AI助手，善于帮助用户解决问题。"],
+      modelName: 'ArkV3',
+    ),
+    tTSConfig: TtsConfig(
+      provider: 'volcano',
+      providerParams: ProviderParams(
+        appId: 'your_tts_app_id',
+        cluster: 'volcano_tts',
+      ),
+    ),
+    aSRConfig: AsrConfig(
+      provider: 'volcano',
+      providerParams: ProviderParams(
+        mode: 'smallmodel',
+        appId: 'your_asr_app_id',
+        cluster: 'volcengine_streaming_common',
+      ),
+    ),
+  ),
+);
+
+// Initialize with AigcConfig
+await RtcAigcPlugin.initializeWithAigcConfig(
+  aigcConfig: aigcConfig,
+  userId: 'user1',  // Client-specific user ID
+  token: 'your_rtc_token',  // Client-specific token
+  serverUrl: 'https://your-server.com',
+  onStateChange: (state, message) {
+    print('State changed: $state, $message');
+  },
+  onMessage: (text, isUser) {
+    print('${isUser ? "User" : "AI"} message: $text');
+  },
+  onAudioStatusChange: (isActive) {
     print('AI is speaking: $isActive');
   },
 );

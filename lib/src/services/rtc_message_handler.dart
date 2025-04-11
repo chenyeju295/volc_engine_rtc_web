@@ -4,7 +4,7 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
 

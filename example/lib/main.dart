@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
 import 'widgets/subtitle_view.dart' as local_widgets;
 
 void main() {
   // 确保Flutter binding已初始化
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   runApp(const MyApp());
 }
 
@@ -102,50 +101,59 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   Future<void> _initialize() async {
     // 确保Flutter binding已初始化
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     setState(() {
       _status = '正在初始化...';
     });
 
     try {
-      // 创建 ASR 配置
-      final asrConfig = AsrConfig(
-        appId: '4799544484', // 替换为您的 ASR AppID
-        cluster: 'volcengine_streaming_common',
-      );
-
-      // 创建 TTS 配置
-      final ttsConfig = TtsConfig(
-        appId: '4799544484', // 替换为您的 TTS AppID
-        voiceType: 'volcano_tts',
-      );
-
-      // 创建 LLM 配置
-      final llmConfig = LlmConfig(
-        modelName: 'ArkV3',
-        endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
-        maxTokens: 1024,
-        temperature: 0.1,
-        topP: 0.3,
-        systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
-        userMessages: [
-          "user:\"你是谁\"",
-          "assistant:\"我是问答助手\"",
-        ],
-        historyLength: 3,
-      );
-
-      // 直接使用静态方法初始化插件
-      final success = await RtcAigcPlugin.initialize(
+      // 创建 AIGC 配置
+      final aigcConfig = AigcConfig(
         appId: '67eb953062b4b601a6df1348', // 替换为您的 APP ID
         roomId: 'room1',
+        taskId: 'user1', serverUrl: 'http://localhost:3001',
+        agentConfig: AgentConfig(
+          userId: 'RobotMan_',
+          welcomeMessage: '你好，我是你的AI小助手，有什么可以帮你的吗？',
+          enableConversationStateCallback: true,
+          serverMessageSignatureForRTS: 'conversation',
+          targetUserId: ['user1'],
+        ),
+        config: Config(
+          lLMConfig: LlmConfig(
+            mode: 'ArkV3',
+            endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
+            maxTokens: 1024,
+            temperature: 0.1,
+            topP: 0.3,
+            systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
+            modelName: 'ArkV3',
+          ),
+          tTSConfig: TtsConfig(
+            provider: 'volcano',
+            providerParams: ProviderParams(
+              appId: '4799544484', // 替换为您的 TTS AppID
+              cluster: 'volcano_tts',
+            ),
+          ),
+          aSRConfig: AsrConfig(
+            provider: 'volcano',
+            providerParams: ProviderParams(
+              mode: 'smallmodel',
+              appId: '4799544484', // 替换为您的 ASR AppID
+              cluster: 'volcengine_streaming_common',
+            ),
+          ),
+        ),
+      );
+
+      // 使用 AigcConfig 初始化插件
+      final success = await RtcAigcPlugin.initializeWithAigcConfig(
+        aigcConfig: aigcConfig,
         userId: 'user1',
-        taskId: 'user1',
-        token: '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
+        token:
+            '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
         serverUrl: "http://localhost:3001",
-        asrConfig: asrConfig,
-        ttsConfig: ttsConfig,
-        llmConfig: llmConfig,
         onStateChange: _handleStateChange,
         onMessage: _handleMessage,
         onAudioStatusChange: _handleAudioStatusChange,
@@ -332,7 +340,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     });
 
     try {
-      final success = await RtcAigcPlugin.joinRoom();
+      final success = await RtcAigcPlugin.joinRoom(
+          roomId: 'room1',
+          userId: 'user1',
+          token:
+              '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==');
 
       if (success) {
         setState(() {

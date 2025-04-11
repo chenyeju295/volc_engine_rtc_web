@@ -2,14 +2,17 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
+
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 import 'package:rtc_aigc_plugin/src/client/aigc_client.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
 
+import '../config/aigc_config.dart';
+
 /// Manages the RTC and AIGC engine initialization and core functionality
 class RtcEngineManager {
-  final RtcConfig config;
+  final AigcConfig config;
   dynamic engine;
   dynamic aigcClient;
   bool isInitialized = false;

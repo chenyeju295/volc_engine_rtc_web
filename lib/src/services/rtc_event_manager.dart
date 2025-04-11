@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+
 import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
@@ -139,7 +139,8 @@ class RtcEventManager {
   Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
   Stream<String> get userJoinStream => _userJoinController.stream;
   Stream<String> get userLeaveStream => _userLeaveController.stream;
-  Stream<String> get userStartAudioCaptureStream => _userStartAudioCaptureController.stream;
+  Stream<String> get userStartAudioCaptureStream =>
+      _userStartAudioCaptureController.stream;
   Stream<Map<String, dynamic>> get subtitleStateStream =>
       _subtitleStateController.stream;
   Stream<Map<String, dynamic>> get audioPropertiesStream =>

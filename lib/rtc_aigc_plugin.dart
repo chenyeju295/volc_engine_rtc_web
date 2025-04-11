@@ -16,13 +16,7 @@ export 'src/models/models.dart';
 
 // 导出客户端相关类
 export 'src/client/aigc_client.dart';
-
-// 导出配置相关类
-export 'src/config/config.dart';
-
-// 导出UI组件
-export 'src/widgets/widgets.dart';
-
+export 'src/config/aigc_config.dart';
 // 导出工具类
 export 'src/utils/rtc_message_utils.dart';
 export 'src/utils/web_utils.dart';
@@ -33,7 +27,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+import 'package:rtc_aigc_plugin/src/config/aigc_config.dart';
 import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/service_manager.dart';
 
@@ -341,6 +335,7 @@ class RtcAigcPlugin {
     AsrConfig? asrConfig,
     TtsConfig? ttsConfig,
     LlmConfig? llmConfig,
+    AigcConfig? aigcConfig,
     void Function(String state, String? message)? onStateChange,
     void Function(String text, bool isUser)? onMessage,
     void Function(bool isPlaying)? onAudioStatusChange,
@@ -392,21 +387,8 @@ class RtcAigcPlugin {
       _onUserStopAudioCapture = onUserStopAudioCapture;
 
       if (kIsWeb) {
-        // 创建配置对象
-        final config = RtcConfig(
-          appId: appId,
-          roomId: roomId,
-          userId: userId,
-          taskId: taskId,
-          token: token,
-          serverUrl: serverUrl,
-          asrConfig: asrConfig ?? const AsrConfig(),
-          ttsConfig: ttsConfig ?? const TtsConfig(),
-          llmConfig: llmConfig ?? const LlmConfig(),
-        );
-
         // 创建服务管理器
-        _serviceManager = ServiceManager(config: config);
+        _serviceManager = ServiceManager(config: aigcConfig!);
 
         // 设置回调
         _serviceManager!.setOnStateChange((state, message) {
@@ -452,9 +434,10 @@ class RtcAigcPlugin {
           'token': token,
           'taskId': taskId,
           'serverUrl': serverUrl,
-          if (asrConfig != null) 'asrConfig': asrConfig.toMap(),
-          if (ttsConfig != null) 'ttsConfig': ttsConfig.toMap(),
-          if (llmConfig != null) 'llmConfig': llmConfig.toMap(),
+          if (asrConfig != null) 'asrConfig': asrConfig,
+          if (ttsConfig != null) 'ttsConfig': ttsConfig,
+          if (llmConfig != null) 'llmConfig': llmConfig,
+          if (aigcConfig != null) 'aigcConfig': aigcConfig.toJson(),
         };
 
         final result = await _channel.invokeMethod('initialize', arguments);
@@ -471,19 +454,65 @@ class RtcAigcPlugin {
     }
   }
 
+  /// Initialize using AigcConfig
+  static Future<bool> initializeWithAigcConfig({
+    required AigcConfig aigcConfig,
+    required String token,
+    required String userId,
+    required String serverUrl,
+    void Function(String state, String? message)? onStateChange,
+    void Function(String text, bool isUser)? onMessage,
+    void Function(bool isPlaying)? onAudioStatusChange,
+    void Function(List<dynamic> audioDevices)? onAudioDevicesChanged,
+    void Function(Map<String, dynamic> subtitle)? onSubtitle,
+    void Function(Map<String, dynamic> data)? onUserJoined,
+    void Function(Map<String, dynamic> data)? onUserLeave,
+    void Function(Map<String, dynamic> data)? onUserPublishStream,
+    void Function(Map<String, dynamic> data)? onUserUnpublishStream,
+    void Function(Map<String, dynamic> data)? onUserStartAudioCapture,
+    void Function(Map<String, dynamic> data)? onUserStopAudioCapture,
+  }) async {
+    if (aigcConfig.appId == null ||
+        aigcConfig.roomId == null ||
+        aigcConfig.taskId == null) {
+      debugPrint('RtcAigcPlugin initialize error: AigcConfig 缺少必要的参数');
+      return false;
+    }
+
+    return initialize(
+      appId: aigcConfig.appId!,
+      roomId: aigcConfig.roomId!,
+      userId: userId,
+      taskId: aigcConfig.taskId!,
+      token: token,
+      serverUrl: serverUrl,
+      aigcConfig: aigcConfig,
+      onStateChange: onStateChange,
+      onMessage: onMessage,
+      onAudioStatusChange: onAudioStatusChange,
+      onAudioDevicesChanged: onAudioDevicesChanged,
+      onSubtitle: onSubtitle,
+      onUserJoined: onUserJoined,
+      onUserLeave: onUserLeave,
+      onUserPublishStream: onUserPublishStream,
+      onUserUnpublishStream: onUserUnpublishStream,
+      onUserStartAudioCapture: onUserStartAudioCapture,
+      onUserStopAudioCapture: onUserStopAudioCapture,
+    );
+  }
+
   /// Join an RTC room
   static Future<bool> joinRoom({
-    String? roomId,
-    String? userId,
-    String? token,
+    required String roomId,
+    required String userId,
+    required String token,
   }) async {
     try {
       if (kIsWeb && _serviceManager != null) {
         return await _serviceManager!.joinRoom(
-          roomId: roomId ?? _serviceManager!.config.roomId,
-          userId: userId ?? _serviceManager!.config.userId,
-          token: token ?? _serviceManager!.config.token,
-        );
+            roomId: roomId ?? _serviceManager!.config.roomId!,
+            userId: userId ?? _serviceManager!.config.agentConfig!.userId!,
+            token: token);
       } else {
         final Map<String, dynamic> arguments = {
           if (roomId != null) 'roomId': roomId,

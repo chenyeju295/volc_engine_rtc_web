@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
 
-import '../config/config.dart';
+import '../config/aigc_config.dart';
 import '../utils/web_utils.dart';
 import '../models/models.dart';
 import 'rtc_service.dart';
@@ -26,9 +27,9 @@ typedef AudioDevicesCallback = void Function(List<dynamic> devices);
 typedef SubtitleCallback = void Function(Map<String, dynamic> subtitle);
 
 /// Service manager for AIGC RTC services
-class ServiceManager   {
+class ServiceManager {
   /// Services configuration
-  final RtcConfig config;
+  final AigcConfig config;
 
   /// RTC Engine Manager
   late final RtcEngineManager _engineManager;
@@ -115,6 +116,7 @@ class ServiceManager   {
 
   /// Connection state subscription
   StreamSubscription<String>? _connectionStateSubscription;
+  late String serverUrl;
 
   /// Create a new service manager
   ServiceManager({required this.config}) {
@@ -455,7 +457,7 @@ class ServiceManager   {
   }
 
   /// Start a conversation
-  Future<bool> startConversation( ) async {
+  Future<bool> startConversation() async {
     if (!_isInitialized || _isDisposed) {
       debugPrint(
           'Cannot start conversation: Service not initialized or disposed');
@@ -596,7 +598,7 @@ class ServiceManager   {
   /// Set audio input device
   Future<bool> setAudioInputDevice(String deviceId) async {
     if (!_isInitialized || _isDisposed) return false;
-    
+
     try {
       // 通过设备管理器设置音频输入设备
       return await _rtcService.setAudioCaptureDevice(deviceId);
@@ -610,7 +612,7 @@ class ServiceManager   {
   /// Set audio output device
   Future<bool> setAudioOutputDevice(String deviceId) async {
     if (!_isInitialized || _isDisposed) return false;
-    
+
     try {
       // 通过设备管理器设置音频输出设备
       return await _rtcService.setAudioPlaybackDevice(deviceId);
@@ -627,7 +629,7 @@ class ServiceManager   {
       _notifyStateChange('error', 'Cannot send message: Service not ready');
       return false;
     }
-    
+
     try {
       return await _rtcService.sendTextMessage(message);
     } catch (e) {

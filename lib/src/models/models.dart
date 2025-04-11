@@ -1,8 +1,6 @@
 /**
  * RTC AIGC 模型类定义
  */
-import 'package:flutter/foundation.dart';
-import 'dart:convert';
 
 /// 消息类型
 enum MessageType {

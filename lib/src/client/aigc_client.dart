@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:rtc_aigc_plugin/src/config/config.dart';
+import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
+
 import 'package:rtc_aigc_plugin/src/models/models.dart';
+
+import '../config/aigc_config.dart';
 
 /// API 操作类型
 enum ActionType {
@@ -26,31 +29,13 @@ class AigcClient {
   /// 服务器基础URL
   final String baseUrl;
 
-  /// 应用ID
-  final String appId;
-
-  final AsrConfig asrConfig;
-
-  final TtsConfig ttsConfig;
-
-  final LlmConfig llmConfig;
-
   /// API 版本
-  final String apiVersion;
+  final String apiVersion = '2024-12-01';
 
   /// HTTP 客户端
   final http.Client _httpClient;
 
-  /// 当前房间ID
-  String roomId;
-
-  /// 当前用户ID
-  String userId;
-
-  /// 当前任务ID
-  String taskId;
-
-  String token;
+  final AigcConfig config;
 
   /// 是否已连接
   bool _isConnected = false;
@@ -72,15 +57,7 @@ class AigcClient {
   /// 构造函数
   AigcClient({
     required this.baseUrl,
-    required this.appId,
-    required this.roomId,
-    required this.userId,
-    required this.token,
-    required this.taskId,
-    required this.asrConfig,
-    required this.ttsConfig,
-    required this.llmConfig,
-    this.apiVersion = '2024-12-01',
+    required this.config,
   }) : _httpClient = http.Client();
 
   /// 消息流
@@ -129,11 +106,6 @@ class AigcClient {
       // 构建API URL - 与api.ts保持一致的格式
       final Uri uri = Uri.parse(
           '$baseUrl/proxyAIGCFetch?Name=$name&Action=${action.value}&Version=$apiVersion');
-
-      // 确保请求中包含AppId
-      if (!params.containsKey('AppId')) {
-        params['AppId'] = appId;
-      }
 
       // 添加请求ID
       if (!params.containsKey('RequestId')) {
@@ -199,11 +171,7 @@ class AigcClient {
     }
 
     try {
-      final result = await stopVoiceChat(
-        roomId: roomId,
-        userId: userId,
-        taskId: taskId,
-      );
+      final result = await stopVoiceChat();
 
       _isConnected = false;
       _setState(AigcClientState.initial);
@@ -228,7 +196,7 @@ class AigcClient {
       final userMessage = RtcAigcMessage(
         id: 'user_${DateTime.now().millisecondsSinceEpoch}',
         type: MessageType.user,
-        senderId: userId,
+        senderId: config.agentConfig?.userId,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
       _addMessage(userMessage);
@@ -238,9 +206,9 @@ class AigcClient {
 
       // 发送更新命令给AI
       final params = {
-        'AppId': appId,
-        'RoomId': roomId,
-        'TaskId': taskId,
+        'AppId': config.appId,
+        'RoomId': config.roomId,
+        'TaskId': config.taskId,
         'Command': 'Text',
         'Message': text,
       };
@@ -269,9 +237,9 @@ class AigcClient {
     try {
       // 发送中断命令
       final params = {
-        'AppId': appId,
-        'RoomId': roomId,
-        'TaskId': taskId,
+        'AppId': config.appId,
+        'RoomId': config.roomId,
+        'TaskId': config.taskId,
         'Command': 'interrupt',
       };
 
@@ -309,70 +277,7 @@ class AigcClient {
   }) async {
     _isConnected = true;
     // 使用与Web Demo一致的参数结构
-    final Map<String, dynamic> params = {
-      'AppId': appId,
-      'RoomId': roomId,
-      'TaskId': taskId, // TaskId实际上是用户ID
-      'BusinessId': businessId,
-
-      // 添加AgentConfig，与Web Demo保持一致
-      'AgentConfig': {
-        'UserId': 'RobotMan_', // 使用固定的机器人ID
-        'WelcomeMessage': welcomeMessage ?? '你好，我是你的AI小助手，有什么可以帮你的吗？',
-        'EnableConversationStateCallback': true,
-        'ServerMessageSignatureForRTS': 'conversation',
-        'TargetUserId': [userId], // TargetUserId是一个数组，包含用户ID
-      },
-
-      // 添加Config配置，保持与Web Demo结构一致
-      'Config': {
-        'LLMConfig': {
-          'Mode': 'ArkV3',
-          'ModelName': llmConfig?.modelName ?? 'Doubao-pro-32k',
-          'MaxTokens': 1024,
-          'Temperature': 0.1,
-          'TopP': 0.3,
-          'SystemMessages':
-              llmConfig?.systemMessages ?? ['你是一个智能助手，性格温和，善解人意，喜欢帮助别人，非常热心。'],
-          'ModelVersion': llmConfig?.modelVersion ?? '1.0',
-        },
-
-        'ASRConfig': {
-          'Provider': 'volcano',
-          'ProviderParams': {
-            'Mode': 'smallmodel',
-            'AppId': asrConfig?.appId ?? this.asrConfig.appId,
-            'Cluster': 'volcengine_streaming_common'
-          },
-          'VADConfig': {
-            'SilenceTime': 600,
-            'SilenceThreshold': 200,
-          },
-          'VolumeGain': 0.3,
-        },
-
-        'TTSConfig': {
-          'Provider': 'volcano',
-          'ProviderParams': {
-            'app': {
-              'AppId': ttsConfig?.appId ?? this.ttsConfig.appId,
-              'Cluster': 'streaming_tts', // 使用火山引擎流式TTS服务
-            },
-            'audio': {
-              'voice_type': ttsConfig?.voiceType ?? this.ttsConfig.voiceType,
-              'speed_ratio': 1.0,
-            },
-          },
-          'IgnoreBracketText': [1, 2, 3, 4, 5],
-        },
-
-        'InterruptMode': 0, // 0表示启用中断模式
-
-        'SubtitleConfig': {
-          'SubtitleMode': 0,
-        },
-      },
-    };
+    final Map<String, dynamic> params = config.toJson();
 
     return _post(
       action: ActionType.startVoiceChat,
@@ -382,15 +287,11 @@ class AigcClient {
   }
 
   /// 更新语音对话
-  Future<Map<String, dynamic>> updateVoiceChat({
-    Map<String, dynamic>? asrConfig,
-    Map<String, dynamic>? ttsConfig,
-    Map<String, dynamic>? llmConfig,
-  }) async {
+  Future<Map<String, dynamic>> updateVoiceChat() async {
     final Map<String, dynamic> params = {
-      'AppId': appId,
-      'RoomId': roomId,
-      'TaskId': taskId,
+      'AppId': config.appId,
+      'RoomId': config.roomId,
+      'TaskId': config.taskId,
       'Command': 'interrupt'
     };
 
@@ -402,21 +303,12 @@ class AigcClient {
   }
 
   /// 停止语音对话
-  Future<Map<String, dynamic>> stopVoiceChat({
-    required String roomId,
-    required String userId,
-    required String taskId,
-    String? businessId,
-  }) async {
+  Future<Map<String, dynamic>> stopVoiceChat() async {
     final params = {
-      'AppId': appId,
-      'RoomId': roomId,
-      'TaskId': taskId,
+      'AppId': config.appId,
+      'RoomId': config.roomId,
+      'TaskId': config.taskId,
     };
-
-    if (businessId != null) {
-      params['BusinessId'] = businessId;
-    }
 
     return _post(
       action: ActionType.stopVoiceChat,
