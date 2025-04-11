@@ -322,7 +322,7 @@ class AigcClient {
       _isConnected = true;
       // 使用与Web Demo一致的参数结构
       final Map<String, dynamic> params = config.toJson();
-
+      params['Config']['LLMConfig']['BotId'] = "BotId12";
       final result = await _post(
         action: ActionType.startVoiceChat,
         name: 'start',

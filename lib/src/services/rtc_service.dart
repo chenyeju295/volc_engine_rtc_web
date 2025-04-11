@@ -4,6 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:rtc_aigc_plugin/rtc_aigc_plugin.dart';
 import 'package:rtc_aigc_plugin/src/config/aigc_config.dart';
+import 'dart:js' as js;
+import 'dart:js_util' as js_util;
+import 'dart:js_interop';
 
 import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_engine_manager.dart';
@@ -12,7 +15,6 @@ import 'package:rtc_aigc_plugin/src/client/aigc_client.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart' as utils;
-import 'dart:js_util' as js_util;
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
 /// RTC消息回调
@@ -1108,6 +1110,68 @@ class RtcService {
     }
   }
 
+  /// 设置并安全获取 MediaType 常量
+  dynamic _getMediaTypeAudio() {
+    try {
+      // 方法1: 尝试通过 js_util.globalThis 获取
+      final mediaTypeObj = js_util.getProperty(js_util.globalThis, 'VERTC');
+      if (mediaTypeObj != null) {
+        dynamic mediaType = js_util.getProperty(mediaTypeObj, 'MediaType');
+        if (mediaType != null) {
+          var audioType = js_util.getProperty(mediaType, 'AUDIO');
+          if (audioType != null) {
+            return audioType;
+          }
+        }
+      }
+      
+      // 方法2: 尝试通过 js.context 获取
+      if (js.context.hasProperty('VERTC')) {
+        final vertc = js.context['VERTC'];
+        if (vertc.hasProperty('MediaType') && vertc['MediaType'].hasProperty('AUDIO')) {
+          return vertc['MediaType']['AUDIO'];
+        }
+      }
+      
+      // 返回默认值 1 (MediaType.AUDIO = 1)
+      return 1;
+    } catch (e) {
+      debugPrint('【RTC服务】获取MediaType.AUDIO常量失败: $e');
+      return 1; // 默认值
+    }
+  }
+  
+  // 设置并安全获取 StreamIndex 常量
+  dynamic _getStreamIndexMain() {
+    try {
+      // 方法1: 尝试通过 js_util.globalThis 获取
+      final streamIndexObj = js_util.getProperty(js_util.globalThis, 'VERTC');
+      if (streamIndexObj != null) {
+        dynamic streamIndex = js_util.getProperty(streamIndexObj, 'StreamIndex');
+        if (streamIndex != null) {
+          var mainType = js_util.getProperty(streamIndex, 'MAIN');
+          if (mainType != null) {
+            return mainType;
+          }
+        }
+      }
+      
+      // 方法2: 尝试通过 js.context 获取
+      if (js.context.hasProperty('VERTC')) {
+        final vertc = js.context['VERTC'];
+        if (vertc.hasProperty('StreamIndex') && vertc['StreamIndex'].hasProperty('STREAM_INDEX_MAIN')) {
+          return vertc['StreamIndex']['STREAM_INDEX_MAIN'];
+        }
+      }
+      
+      // 返回默认值 0 (StreamIndex.STREAM_INDEX_MAIN = 0)
+      return 0;
+    } catch (e) {
+      debugPrint('【RTC服务】获取StreamIndex.MAIN常量失败: $e');
+      return 0; // 默认值
+    }
+  }
+
   /// 开始音频采集
   /// 开启内部音频采集。默认为关闭状态。
   /// 内部采集是指：使用 RTC SDK 内置采集机制进行音频采集。
@@ -1150,29 +1214,13 @@ class RtcService {
         
         // 发布音频流
         try {
-          // 获取MediaType.AUDIO常量 (1)
-          final mediaTypeObj = js_util.getProperty(js_util.globalThis, 'VERTC');
-          dynamic mediaType = 1; // 默认值
-          
-          if (mediaTypeObj != null) {
-            try {
-              // 尝试获取MediaType.AUDIO常量
-              mediaType = js_util.getProperty(mediaTypeObj, 'MediaType');
-              if (mediaType != null) {
-                mediaType = js_util.getProperty(mediaType, 'AUDIO');
-              }
-              
-              if (mediaType == null) mediaType = 1;
-            } catch (e) {
-              debugPrint('【RTC服务】获取MediaType.AUDIO常量失败，使用默认值(1): $e');
-              mediaType = 1;
-            }
-          }
+          // 获取MediaType.AUDIO常量
+          dynamic mediaType = _getMediaTypeAudio();
           
           // 发布音频流
           final publishPromise = js_util.callMethod(rtcClient, 'publishStream', [mediaType]);
           await js_util.promiseToFuture(publishPromise);
-          debugPrint('【RTC服务】音频流发布成功');
+          debugPrint('【RTC服务】音频流发布成功，使用MediaType.AUDIO: $mediaType');
         } catch (e) {
           debugPrint('【RTC服务】发布音频流失败，但采集已启动: $e');
           // 不影响整体返回结果，因为采集已启动
@@ -1252,29 +1300,13 @@ class RtcService {
 
       // 先尝试取消发布流
       try {
-        // 获取MediaType.AUDIO常量 (1)
-        final mediaTypeObj = js_util.getProperty(js_util.globalThis, 'VERTC');
-        dynamic mediaType = 1; // 默认值
-        
-        if (mediaTypeObj != null) {
-          try {
-            // 尝试获取MediaType.AUDIO常量
-            mediaType = js_util.getProperty(mediaTypeObj, 'MediaType');
-            if (mediaType != null) {
-              mediaType = js_util.getProperty(mediaType, 'AUDIO');
-            }
-            
-            if (mediaType == null) mediaType = 1;
-          } catch (e) {
-            debugPrint('【RTC服务】获取MediaType.AUDIO常量失败，使用默认值(1): $e');
-            mediaType = 1;
-          }
-        }
+        // 获取MediaType.AUDIO常量
+        dynamic mediaType = _getMediaTypeAudio();
         
         // 取消发布音频流
         final unpublishPromise = js_util.callMethod(rtcClient, 'unpublishStream', [mediaType]);
         await js_util.promiseToFuture(unpublishPromise);
-        debugPrint('【RTC服务】取消发布音频流成功');
+        debugPrint('【RTC服务】取消发布音频流成功，使用MediaType.AUDIO: $mediaType');
       } catch (e) {
         debugPrint('【RTC服务】取消发布音频流失败: $e');
         // 继续执行，不影响停止采集

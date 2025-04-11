@@ -662,15 +662,27 @@ class RtcEventManager {
       // 发送到专用流
       _userStartAudioCaptureController.add(userId);
 
-      // 更新音频状态
-      // if (userId == config.userId) {
-      //   _isAudioCapturing = true;
-      //   _audioStatusController.add(true);
-      // }
+      // 为本地用户更新音频状态
+      // 注意: 根据时序图，当AI开始说话时会触发此事件
+      // 这里我们通过判断用户ID来确认是否是AI在说话
+      if (userId != null && userId.isNotEmpty) {
+        // AI 用户通常是房间中的其他用户
+        if (_joinedUsers.contains(userId) && !userId.contains('local_')) {
+          debugPrint('AI用户 $userId 开始说话');
+          _isAITalking = true;
+          _audioStatusController.add(true); // 通知UI AI开始说话
+        } else if (userId.contains('local_') || userId == 'local') { 
+          // 本地用户
+          _isAudioCapturing = true;
+          _audioStatusController.add(true);
+          debugPrint('本地用户开始采集音频');
+        }
+      }
 
       _stateController.add({
         'type': 'user_start_audio_capture',
         'userId': userId,
+        'isAITalking': _isAITalking,
         'timestamp': DateTime.now().millisecondsSinceEpoch
       });
     } catch (e) {
@@ -679,19 +691,33 @@ class RtcEventManager {
   }
 
   void _handleUserStopAudioCapture(dynamic event) {
-    debugPrint('事件: onUserStopAudioCapture');
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
+      debugPrint('事件: onUserStopAudioCapture $userId');
+
+      // 从专用流向外发送
+      _userStopAudioCaptureController.add(userId);
 
       // 更新音频状态
-      // if (userId == config.userId) {
-      //   _isAudioCapturing = false;
-      //   _audioStatusController.add(false);
-      // }
+      // 注意: 根据时序图，当AI说完话时会触发此事件
+      if (userId != null && userId.isNotEmpty) {
+        // AI 用户通常是房间中的其他用户
+        if (_joinedUsers.contains(userId) && !userId.contains('local_')) {
+          debugPrint('AI用户 $userId 停止说话');
+          _isAITalking = false;
+          _audioStatusController.add(false); // 通知UI AI停止说话
+        } else if (userId.contains('local_') || userId == 'local') { 
+          // 本地用户
+          _isAudioCapturing = false;
+          _audioStatusController.add(false);
+          debugPrint('本地用户停止采集音频');
+        }
+      }
 
       _stateController.add({
         'type': 'user_stop_audio_capture',
         'userId': userId,
+        'isAITalking': _isAITalking,
         'timestamp': DateTime.now().millisecondsSinceEpoch
       });
     } catch (e) {

@@ -125,14 +125,14 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         ),
         config: Config(
           lLMConfig: LlmConfig(
-            mode: 'ArkV3',
-            endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
-            maxTokens: 1024,
-            temperature: 0.1,
-            topP: 0.3,
-            systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
-            modelName: 'ArkV3',
-          ),
+              mode: 'ArkV3',
+              endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
+              maxTokens: 1024,
+              temperature: 0.1,
+              topP: 0.3,
+              systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
+              modelName: 'ArkV3',
+              welcomeSpeech: "你好，我是你的AI小助手，有什么可以帮你的吗？"),
           tTSConfig: TtsConfig(
             provider: 'volcano',
             providerParams: ProviderParams(
