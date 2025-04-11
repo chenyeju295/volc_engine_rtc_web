@@ -277,7 +277,6 @@ class RtcService {
         final message = RtcAigcMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.system,
-          content: '用户 $userId 加入房间',
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         _messageCallback!(message);
@@ -292,7 +291,6 @@ class RtcService {
         final message = RtcAigcMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.system,
-          content: '用户 $userId 离开房间',
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         _messageCallback!(message);
@@ -401,7 +399,6 @@ class RtcService {
         final message = RtcAigcMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.system,
-          content: '自动播放失败，请点击界面恢复音频',
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         _messageCallback!(message);
@@ -465,7 +462,6 @@ class RtcService {
         final message = RtcAigcMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.system,
-          content: '会话已被中断',
           timestamp: DateTime.now().millisecondsSinceEpoch,
           isInterrupted: true,
         );
@@ -481,7 +477,7 @@ class RtcService {
     // AIGC客户端消息监听
     if (_aigcClient != null) {
       _aigcClient!.messageStream.listen((message) {
-        debugPrint('【RTC服务】收到AIGC消息: ${message.content}');
+        debugPrint('【RTC服务】收到AIGC消息: ${message.text}');
         _addMessage(message);
 
         if (_messageCallback != null) {
@@ -504,7 +500,6 @@ class RtcService {
             final message = RtcAigcMessage(
               id: DateTime.now().millisecondsSinceEpoch.toString(),
               type: MessageType.error,
-              content: 'AI服务异常，请稍后再试',
               timestamp: DateTime.now().millisecondsSinceEpoch,
             );
             _messageCallback!(message);
@@ -758,7 +753,6 @@ class RtcService {
         final message = RtcAigcMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.system,
-          content: '对话已结束',
           timestamp: DateTime.now().millisecondsSinceEpoch,
         );
         _messageCallback!(message);
@@ -771,68 +765,33 @@ class RtcService {
     }
   }
 
-  /// 发送消息到AI
-  Future<bool> sendMessage(String text) async {
+  /// 发送文本消息到AI
+  Future<bool> sendTextMessage(String message) async {
+    if (!_isInitialized || _isDisposed || !_isInRoom || !_isInConversation) {
+      debugPrint('Cannot send message: Not in conversation');
+      return false;
+    }
+
     try {
-      if (!_checkInitialized()) return false;
-
-      if (!_isInRoom || !_isInConversation) {
-        debugPrint('【RTC服务】未在对话中，无法发送消息');
-        return false;
-      }
-
-      debugPrint('【RTC服务】发送消息: $text');
-
       // 添加用户消息到历史记录
-      final userMessage = RtcAigcMessage(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        type: MessageType.user,
-        content: text,
+      final userMessage = RtcAigcMessage.user(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        text: message,
         senderId: _config.userId,
-        timestamp: DateTime.now().millisecondsSinceEpoch,
       );
+
+      // 添加到历史记录
       _addMessage(userMessage);
 
-      if (_messageCallback != null) {
-        _messageCallback!(userMessage);
+      // 发送到AI服务
+      if (_aigcClient != null) {
+        _aigcClient!.sendMessage(message);
+        return true;
       }
-
-      // 发送消息给AI
-      final sendSuccess = await _aigcClient!.sendMessage(text);
-
-      if (!sendSuccess) {
-        // 发送失败消息
-        if (_messageCallback != null) {
-          final errorMessage = RtcAigcMessage(
-            id: 'error_${DateTime.now().millisecondsSinceEpoch}',
-            type: MessageType.error,
-            content: '消息发送失败，请稍后再试',
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          );
-          _messageCallback!(errorMessage);
-        }
-
-        return false;
-      }
-
-      // 更新状态为等待响应
-      _setState(RtcState.waitingResponse);
-
-      return true;
+      
+      return false;
     } catch (e) {
-      debugPrint('【RTC服务】发送消息时发生错误: $e');
-
-      // 发送错误消息
-      if (_messageCallback != null) {
-        final errorMessage = RtcAigcMessage(
-          id: 'error_${DateTime.now().millisecondsSinceEpoch}',
-          type: MessageType.error,
-          content: '发送消息时出错: ${e.toString()}',
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        );
-        _messageCallback!(errorMessage);
-      }
-
+      debugPrint('Error sending message: $e');
       return false;
     }
   }
@@ -858,7 +817,6 @@ class RtcService {
           final message = RtcAigcMessage(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             type: MessageType.system,
-            content: '已中断AI回复',
             timestamp: DateTime.now().millisecondsSinceEpoch,
           );
           _messageCallback!(message);
@@ -1132,8 +1090,6 @@ class RtcService {
   /// 是否正在对话中
   bool get isInConversation => _isInConversation;
 
-
-
   /// 获取消息历史
   List<RtcAigcMessage> getMessageHistory() {
     return List.unmodifiable(_messageHistory);
@@ -1233,22 +1189,4 @@ class RtcService {
       return false;
     }
   }
-}
-
-/// 添加一个枚举类定义RTC连接状态
-enum RtcConnectionState {
-  /// 已断开连接
-  disconnected,
-
-  /// 正在连接中
-  connecting,
-
-  /// 已连接
-  connected,
-
-  /// 连接失败
-  failed,
-
-  /// 未知状态
-  unknown
 }

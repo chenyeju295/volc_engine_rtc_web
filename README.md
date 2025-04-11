@@ -139,4 +139,68 @@ See the [example](./example) folder for a complete example application.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Recent Code Optimizations
+
+The plugin has undergone several optimizations to improve code quality and maintainability:
+
+### 1. Unified Stream Organization
+- Streams are now organized into logical groups (messages, audio, status, RTC events)
+- Eliminated redundant stream definitions
+- Added clear section headers for better code readability
+
+### 2. Standard Method Naming Conventions
+- Replaced inconsistent method aliases with standardized names
+- Updated method signatures for consistency
+- Deprecated older method names with proper annotations
+
+### 3. Removed Redundant Code
+- Eliminated the redundant `content` parameter in `RtcAigcMessage` class
+- Removed commented-out code
+- Un-commented and properly named the `RtcConnectionState` enum
+
+### 4. Enhanced Error Handling
+- Added consistent error handling patterns
+- Improved error reporting through dedicated helper methods
+- Added descriptive debug logging
+
+### 5. Code Documentation
+- Updated method documentation to match implementation
+- Added clear documentation for all public APIs
+- Improved comments for better code understanding
+
+## Architecture Refactoring
+
+The plugin architecture has been completely refactored to improve performance and eliminate unnecessary complexity:
+
+### 1. Eliminated Redundant Method Channel Communication
+- Removed unnecessary method channel communication between Dart files
+- Directly use the ServiceManager instead of going through method channels for web platform
+- Preserved method channels only for native platform communication (iOS/Android)
+
+### 2. Simplified Plugin Structure
+- Removed the singleton pattern for more direct static method access
+- Eliminated the separate web implementation file dependency
+- Consolidated stream controllers and event handling in a single location
+
+### 3. Improved API Design
+- Created a cleaner, more intuitive API surface with named parameters
+- Enhanced error handling with consistent patterns
+- Added proper type safety to all stream definitions
+
+### 4. Better Event Handling
+- Added direct event listeners to service manager events
+- Implemented unified event broadcasting for both web and native platforms
+- Reduced latency by eliminating unnecessary serialization/deserialization
+
+### 5. Enhanced Platform Detection
+- Used proper platform checks for web-specific functionality
+- Improved initialization process with appropriate bindings
+- Added graceful fallbacks for cross-platform usage
+
+This refactoring results in:
+- More efficient communication between components
+- Reduced code complexity and better maintainability
+- Improved debugging experience with clearer code paths
+- Better performance by eliminating unnecessary indirection 

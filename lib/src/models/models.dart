@@ -107,7 +107,7 @@ enum RtcState {
 
   /// 等待AI响应中
   waitingResponse,
-  
+
   /// 发生错误
   error,
 
@@ -115,20 +115,23 @@ enum RtcState {
   disposed
 }
 
-// /// RTC连接状态
-// enum ConnectionState {
-//   /// 已断开连接
-//   disconnected,
-//
-//   /// 正在连接中
-//   connecting,
-//
-//   /// 已连接
-//   connected,
-//
-//   /// 连接失败
-//   failed
-// }
+/// RTC连接状态
+enum RtcConnectionState {
+  /// 已断开连接
+  disconnected,
+
+  /// 正在连接中
+  connecting,
+
+  /// 已连接
+  connected,
+
+  /// 连接失败
+  failed,
+
+  /// 未知状态
+  unknown
+}
 
 /// RTC AIGC消息模型
 class RtcAigcMessage {
@@ -140,9 +143,6 @@ class RtcAigcMessage {
 
   /// 消息内容
   final String? text;
-
-  /// 消息内容 (与text同义，为兼容性添加)
-  final String? content;
 
   /// 发送者ID
   final String? senderId;
@@ -170,7 +170,6 @@ class RtcAigcMessage {
     required this.id,
     required this.type,
     this.text,
-    this.content,
     this.senderId,
     this.isUser,
     this.isInterrupted = false,
@@ -192,7 +191,6 @@ class RtcAigcMessage {
       id: id,
       type: MessageType.text,
       text: text,
-      content: text,
       senderId: senderId,
       isUser: isUser,
       timestamp: timestamp,
@@ -210,7 +208,6 @@ class RtcAigcMessage {
       id: id,
       type: MessageType.user,
       text: text,
-      content: text,
       senderId: senderId,
       isUser: true,
       timestamp: timestamp,
@@ -228,7 +225,6 @@ class RtcAigcMessage {
       id: id,
       type: MessageType.ai,
       text: text,
-      content: text,
       senderId: senderId,
       isUser: false,
       timestamp: timestamp,
@@ -245,7 +241,7 @@ class RtcAigcMessage {
       id: id,
       type: MessageType.system,
       text: text,
-      content: text,
+      senderId: null,
       isUser: false,
       timestamp: timestamp,
     );
@@ -261,7 +257,7 @@ class RtcAigcMessage {
       id: id,
       type: MessageType.error,
       text: text,
-      content: text,
+      senderId: null,
       isUser: false,
       timestamp: timestamp,
     );
@@ -417,12 +413,15 @@ class RtcAigcMessage {
               DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.unknown,
           text: json['text'] as String?,
-          content: json['text'] as String?,
           senderId: json['senderId'] as String?,
           isUser: json['isUser'] as bool? ?? false,
+          isInterrupted: false,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
               : null,
+          functionCall: null,
+          functionReturn: null,
+          status: null,
         );
     }
   }
@@ -438,7 +437,6 @@ class RtcAigcMessage {
 
     if (text != null) {
       json['text'] = text;
-      json['content'] = text;
     }
 
     if (senderId != null) {
@@ -469,7 +467,6 @@ class RtcAigcMessage {
     String? id,
     MessageType? type,
     String? text,
-    String? content,
     String? senderId,
     bool? isUser,
     bool? isInterrupted,
@@ -481,8 +478,7 @@ class RtcAigcMessage {
     return RtcAigcMessage(
       id: id ?? this.id,
       type: type ?? this.type,
-      text: content ?? text ?? this.text,
-      content: content ?? text ?? this.content,
+      text: text ?? this.text,
       senderId: senderId ?? this.senderId,
       isUser: isUser ?? this.isUser,
       isInterrupted: isInterrupted ?? this.isInterrupted,
@@ -495,7 +491,7 @@ class RtcAigcMessage {
 
   @override
   String toString() {
-    return 'RtcAigcMessage{id: $id, type: $type, text: $text, content: $content, isUser: $isUser, senderId: $senderId, isInterrupted: $isInterrupted, timestamp: $timestamp, functionCall: $functionCall, functionReturn: $functionReturn, status: $status}';
+    return 'RtcAigcMessage{id: $id, type: $type, text: $text, senderId: $senderId, isUser: $isUser, isInterrupted: $isInterrupted, timestamp: $timestamp, functionCall: $functionCall, functionReturn: $functionReturn, status: $status}';
   }
 
   /// Convert message type to string

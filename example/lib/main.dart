@@ -5,7 +5,9 @@ import 'package:rtc_aigc_plugin/src/config/config.dart';
 import 'widgets/subtitle_view.dart' as local_widgets;
 
 void main() {
+  // 确保Flutter binding已初始化
   WidgetsFlutterBinding.ensureInitialized();
+  
   runApp(const MyApp());
 }
 
@@ -40,7 +42,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   bool _isSpeaking = false;
   String _currentSubtitle = '';
   bool _isSubtitleFinal = false;
-  List<Map<String, dynamic>> _messages = [];
+  List<RtcAigcMessage> _messages = [];
   List<Map<String, String>> _audioInputDevices = [];
   List<Map<String, String>> _audioOutputDevices = [];
   String? _selectedAudioInputId;
@@ -60,7 +62,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   StreamSubscription? _audioStatusSubscription;
   StreamSubscription? _messageSubscription;
   StreamSubscription? _stateSubscription;
-  
+
   // 新增: RTC事件订阅
   StreamSubscription? _userJoinedSubscription;
   StreamSubscription? _userLeaveSubscription;
@@ -72,6 +74,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   @override
   void initState() {
     super.initState();
+
     _initialize();
   }
 
@@ -81,7 +84,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     _audioStatusSubscription?.cancel();
     _messageSubscription?.cancel();
     _stateSubscription?.cancel();
-    
+
     // 新增: 取消RTC事件订阅
     _userJoinedSubscription?.cancel();
     _userLeaveSubscription?.cancel();
@@ -89,7 +92,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     _userUnpublishStreamSubscription?.cancel();
     _userStartAudioCaptureSubscription?.cancel();
     _userStopAudioCaptureSubscription?.cancel();
-    
+
     _messageController.dispose();
     _scrollController.dispose();
     RtcAigcPlugin.dispose();
@@ -97,6 +100,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   }
 
   Future<void> _initialize() async {
+    // 确保Flutter binding已初始化
+    WidgetsFlutterBinding.ensureInitialized();
+    
     setState(() {
       _status = '正在初始化...';
     });
@@ -129,6 +135,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         historyLength: 3,
       );
 
+      // 直接使用静态方法初始化插件
       final success = await RtcAigcPlugin.initialize(
         appId: '67eb953062b4b601a6df1348', // 替换为您的 APP ID
         roomId: 'room1',
@@ -143,7 +150,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         onMessage: _handleMessage,
         onAudioStatusChange: _handleAudioStatusChange,
         onSubtitle: _handleSubtitle,
-        // 新增: 设置RTC事件回调
         onUserJoined: _handleUserJoined,
         onUserLeave: _handleUserLeave,
         onUserPublishStream: _handleUserPublishStream,
@@ -210,7 +216,8 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     });
 
     // 订阅音频状态流
-    _audioStatusSubscription = RtcAigcPlugin.audioStatusStream.listen((isActive) {
+    _audioStatusSubscription =
+        RtcAigcPlugin.audioStatusStream.listen((isActive) {
       setState(() {
         _isSpeaking = isActive;
       });
@@ -218,10 +225,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
     // 订阅消息流
     _messageSubscription = RtcAigcPlugin.messageHistoryStream.listen((message) {
-      if (message == null) return;
-      final Map<String, dynamic> messageMap = message as Map<String, dynamic>;
+      final List<RtcAigcMessage> messageMap = message as List<RtcAigcMessage>;
       setState(() {
-        _messages.add(messageMap);
+        _messages.addAll(messageMap);
       });
       _scrollToBottom();
     });
@@ -233,40 +239,44 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         _status = state.toString();
       });
     });
-    
+
     // 新增: 订阅RTC事件流
     _setupRtcEventSubscriptions();
   }
-  
+
   // 新增: 设置RTC事件订阅
   void _setupRtcEventSubscriptions() {
     // 用户加入事件
     _userJoinedSubscription = RtcAigcPlugin.userJoinedStream.listen((data) {
       _handleUserJoined(data);
     });
-    
+
     // 用户离开事件
     _userLeaveSubscription = RtcAigcPlugin.userLeaveStream.listen((data) {
       _handleUserLeave(data);
     });
-    
+
     // 用户发布流事件
-    _userPublishStreamSubscription = RtcAigcPlugin.userPublishStreamStream.listen((data) {
+    _userPublishStreamSubscription =
+        RtcAigcPlugin.userPublishStreamStream.listen((data) {
       _handleUserPublishStream(data);
     });
-    
+
     // 用户取消发布流事件
-    _userUnpublishStreamSubscription = RtcAigcPlugin.userUnpublishStreamStream.listen((data) {
+    _userUnpublishStreamSubscription =
+        RtcAigcPlugin.userUnpublishStreamStream.listen((data) {
       _handleUserUnpublishStream(data);
     });
-    
+
     // 用户开始音频采集事件
-    _userStartAudioCaptureSubscription = RtcAigcPlugin.userStartAudioCaptureStream.listen((data) {
+    _userStartAudioCaptureSubscription =
+        RtcAigcPlugin.userStartAudioCaptureStream.listen((data) {
       _handleUserStartAudioCapture(data);
     });
-    
+
     // 用户停止音频采集事件
-    _userStopAudioCaptureSubscription = RtcAigcPlugin.userStopAudioCaptureStream.listen((data) {
+    _userStopAudioCaptureSubscription =
+        RtcAigcPlugin.userStopAudioCaptureStream.listen((data) {
       _handleUserStopAudioCapture(data);
     });
   }
@@ -291,11 +301,12 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
   void _handleMessage(String text, bool isUser) {
     setState(() {
-      _messages.add({
-        'text': text,
-        'isUser': isUser,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      _messages.add(RtcAigcMessage(
+        text: text,
+        isUser: isUser,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        type: MessageType.text,
+      ));
     });
     _scrollToBottom();
   }
@@ -481,7 +492,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 处理用户离开事件
   void _handleUserLeave(Map<String, dynamic> data) {
     final userId = data['userId'];
@@ -494,7 +505,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 处理用户发布流事件
   void _handleUserPublishStream(Map<String, dynamic> data) {
     final userId = data['userId'];
@@ -505,7 +516,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 处理用户取消发布流事件
   void _handleUserUnpublishStream(Map<String, dynamic> data) {
     final userId = data['userId'];
@@ -516,7 +527,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 处理用户开始音频采集事件
   void _handleUserStartAudioCapture(Map<String, dynamic> data) {
     final userId = data['userId'];
@@ -527,7 +538,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 处理用户停止音频采集事件
   void _handleUserStopAudioCapture(Map<String, dynamic> data) {
     final userId = data['userId'];
@@ -538,16 +549,16 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       });
     }
   }
-  
+
   // 新增: 添加系统消息
   void _addSystemMessage(String text) {
     setState(() {
-      _messages.add({
-        'text': text,
-        'isUser': false,
-        'isSystem': true,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
+      _messages.add(RtcAigcMessage(
+        text: text,
+        isUser: false,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        type: MessageType.text,
+      ));
     });
     _scrollToBottom();
   }
@@ -592,9 +603,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
           // 主内容区域
           Expanded(
-            child: isMobile
-                ? _buildMobileLayout()
-                : _buildDesktopLayout(),
+            child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
           ),
         ],
       ),
@@ -710,13 +719,14 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
                 Text('AI状态', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4.0),
                 _buildStatusItem('AI用户ID', _aiUserId ?? '未加入'),
-                _buildStatusItem('音频采集', _isAiAudioCaptureStarted ? '已开始' : '未开始'),
+                _buildStatusItem(
+                    '音频采集', _isAiAudioCaptureStarted ? '已开始' : '未开始'),
                 _buildStatusItem('媒体发布', _isAiPublished ? '已发布' : '未发布'),
               ],
             ),
           ),
         ),
-        
+
         // 房间控制
         Card(
           child: Padding(
@@ -727,9 +737,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
                 Text('房间控制', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8.0),
                 ElevatedButton(
-                  onPressed: _isInitialized && !_isJoined
-                      ? _joinRoom
-                      : null,
+                  onPressed: _isInitialized && !_isJoined ? _joinRoom : null,
                   child: const Text('加入房间'),
                 ),
                 const SizedBox(height: 8.0),
@@ -741,9 +749,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
                 ),
                 const SizedBox(height: 8.0),
                 ElevatedButton(
-                  onPressed: _isConversationActive
-                      ? _stopConversation
-                      : null,
+                  onPressed: _isConversationActive ? _stopConversation : null,
                   child: const Text('停止对话'),
                 ),
                 const SizedBox(height: 8.0),
@@ -759,64 +765,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             ),
           ),
         ),
-
-        // 音频设备控制
-        // Card(
-        //   child: Padding(
-        //     padding: const EdgeInsets.all(8.0),
-        //     child: Column(
-        //       crossAxisAlignment: CrossAxisAlignment.stretch,
-        //       children: [
-        //         Text('音频设备', style: TextStyle(fontWeight: FontWeight.bold)),
-        //         const SizedBox(height: 8.0),
-        //         const Text('输入设备:'),
-        //         SizedBox(      width: 120,
-        //           child: DropdownButton<String>(
-        //             value: _selectedAudioInputId,
-        //             items: _audioInputDevices
-        //                 .map((device) => DropdownMenuItem(
-        //                       value: device['deviceId'],
-        //                       child: Text(device['label'] ?? ''),
-        //                     ))
-        //                 .toList(),
-        //             onChanged: (value) async {
-        //               if (value != null) {
-        //                 await RtcAigcPlugin.setAudioInputDevice(
-        //                     value);
-        //                 setState(() {
-        //                   _selectedAudioInputId = value;
-        //                 });
-        //               }
-        //             },
-        //           ),
-        //         ),
-        //         const SizedBox(height: 8.0),
-        //         const Text('输出设备:'),
-        //         SizedBox(
-        //           width: 120,
-        //           child: DropdownButton<String>(
-        //             value: _selectedAudioOutputId,
-        //             items: _audioOutputDevices
-        //                 .map((device) => DropdownMenuItem(
-        //                       value: device['deviceId'],
-        //                       child: Text(device['label'] ?? ''),
-        //                     ))
-        //                 .toList(),
-        //             onChanged: (value) async {
-        //               if (value != null) {
-        //                 await RtcAigcPlugin.setAudioOutputDevice(
-        //                     value);
-        //                 setState(() {
-        //                   _selectedAudioOutputId = value;
-        //                 });
-        //               }
-        //             },
-        //           ),
-        //         ),
-        //       ],
-        //     ),
-        //   ),
-        // ),
       ],
     );
   }
@@ -833,8 +781,8 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             value,
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: value.contains('未') || value.contains('不') 
-                  ? Colors.red.shade700 
+              color: value.contains('未') || value.contains('不')
+                  ? Colors.red.shade700
                   : Colors.green.shade700,
             ),
           ),
@@ -843,10 +791,10 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     );
   }
 
-  Widget _buildMessageItem(Map<String, dynamic> message) {
-    final isUser = message['isUser'] ?? false;
-    final isSystem = message['isSystem'] ?? false;
-    
+  Widget _buildMessageItem(RtcAigcMessage message) {
+    final isUser = message.isUser ?? false;
+    final isSystem = message.isUser ?? false;
+
     if (isSystem) {
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 4.0),
@@ -859,13 +807,13 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             borderRadius: BorderRadius.circular(16.0),
           ),
           child: Text(
-            message['text'] ?? '',
+            message.text ?? '',
             style: const TextStyle(color: Colors.white),
           ),
         ),
       );
     }
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       padding: const EdgeInsets.all(8.0),
@@ -893,7 +841,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4.0),
-                Text(message['text'] ?? ''),
+                Text(message.text ?? ''),
               ],
             ),
           ),

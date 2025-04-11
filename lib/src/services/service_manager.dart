@@ -593,20 +593,54 @@ class ServiceManager   {
     }
   }
 
-  /// Send a message to the AI
-  @override
-  Future<bool> sendMessage(String text) async {
-    if (!_isInitialized || _isDisposed || !_isConversationActive) {
-      debugPrint(
-          'Cannot send message: Service not initialized, disposed, or conversation not active');
+  /// Set audio input device
+  Future<bool> setAudioInputDevice(String deviceId) async {
+    if (!_isInitialized || _isDisposed) return false;
+    
+    try {
+      // 通过设备管理器设置音频输入设备
+      return await _rtcService.setAudioCaptureDevice(deviceId);
+    } catch (e) {
+      debugPrint('Error setting audio input device: $e');
+      _notifyStateChange('error', 'Failed to set audio input device: $e');
       return false;
     }
+  }
 
+  /// Set audio output device
+  Future<bool> setAudioOutputDevice(String deviceId) async {
+    if (!_isInitialized || _isDisposed) return false;
+    
     try {
-      return await _rtcService.sendMessage(text);
+      // 通过设备管理器设置音频输出设备
+      return await _rtcService.setAudioPlaybackDevice(deviceId);
+    } catch (e) {
+      debugPrint('Error setting audio output device: $e');
+      _notifyStateChange('error', 'Failed to set audio output device: $e');
+      return false;
+    }
+  }
+
+  /// Send text message to AI
+  Future<bool> sendMessage(String message) async {
+    if (!_isInitialized || _isDisposed || !_isConversationActive) {
+      _notifyStateChange('error', 'Cannot send message: Service not ready');
+      return false;
+    }
+    
+    try {
+      return await _rtcService.sendTextMessage(message);
     } catch (e) {
       debugPrint('Error sending message: $e');
+      _notifyStateChange('error', 'Failed to send message: $e');
       return false;
+    }
+  }
+
+  /// Helper to notify state changes
+  void _notifyStateChange(String state, String? message) {
+    if (_onStateChange != null && !_isDisposed) {
+      _safeCallback(() => _onStateChange!(state, message));
     }
   }
 
@@ -687,40 +721,6 @@ class ServiceManager   {
     } catch (e) {
       debugPrint('Error getting audio output devices: $e');
       return [];
-    }
-  }
-
-  /// Set the audio capture device
-  @override
-  Future<bool> setAudioCaptureDevice(String deviceId) async {
-    if (!_isInitialized || _isDisposed) {
-      debugPrint(
-          'Cannot set audio capture device: Service not initialized or disposed');
-      return false;
-    }
-
-    try {
-      return await _rtcService.setAudioCaptureDevice(deviceId);
-    } catch (e) {
-      debugPrint('Error setting audio capture device: $e');
-      return false;
-    }
-  }
-
-  /// Set the audio playback device
-  @override
-  Future<bool> setAudioPlaybackDevice(String deviceId) async {
-    if (!_isInitialized || _isDisposed) {
-      debugPrint(
-          'Cannot set audio playback device: Service not initialized or disposed');
-      return false;
-    }
-
-    try {
-      return await _rtcService.setAudioPlaybackDevice(deviceId);
-    } catch (e) {
-      debugPrint('Error setting audio playback device: $e');
-      return false;
     }
   }
 

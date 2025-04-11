@@ -111,7 +111,7 @@ class AigcClient {
   void _addMessage(RtcAigcMessage message) {
     _messageHistory.add(message);
     _messageController.add(message);
-    debugPrint('[AigcClient] 新消息: ${message.content}');
+    debugPrint('[AigcClient] 新消息: ${message.text}');
   }
 
   /// 生成唯一请求ID
@@ -228,7 +228,6 @@ class AigcClient {
       final userMessage = RtcAigcMessage(
         id: 'user_${DateTime.now().millisecondsSinceEpoch}',
         type: MessageType.user,
-        content: text,
         senderId: userId,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
