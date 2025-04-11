@@ -21,6 +21,12 @@ class RtcEngineManager {
 
   RtcEngineManager({required this.config});
 
+  /// 注册事件处理器
+  void registerEventHandler(RtcEventManager eventHandler) {
+    _eventHandler = eventHandler;
+    debugPrint('【RTC引擎】已注册事件处理器');
+  }
+
   /// Returns the RTC client instance
   dynamic getRtcClient() {
     return engine;
@@ -43,9 +49,14 @@ class RtcEngineManager {
   }
 
   Future<void> _initializeRtcEngine() async {
-    // Wait for SDK to load
-    debugPrint('【RTC引擎】正在加载RTC SDK...');
-    await WebUtils.waitForSdkLoaded();
+    // Check if SDK is already loaded first
+    if (!WebUtils.isSdkLoaded()) {
+      // Wait for SDK to load
+      debugPrint('【RTC引擎】正在加载RTC SDK...');
+      await WebUtils.waitForSdkLoaded();
+    } else {
+      debugPrint('【RTC引擎】RTC SDK已加载，跳过等待过程');
+    }
 
     // Verify SDK availability
     if (!WebUtils.isSdkLoaded()) {
@@ -99,19 +110,6 @@ class RtcEngineManager {
     } catch (e) {
       debugPrint('【RTC引擎】创建RTC引擎失败: $e');
       throw Exception('创建RTC引擎失败: $e');
-    }
-  }
-
-  /// 注册事件处理器
-  void registerEventHandler(RtcEventManager eventHandler) {
-    _eventHandler = eventHandler;
-
-    // 设置引擎实例
-    if (engine != null) {
-      _eventHandler?.setEngine(engine);
-      debugPrint('【引擎管理器】成功注册事件处理器，并设置引擎实例');
-    } else {
-      debugPrint('【引擎管理器】注册事件处理器失败：引擎实例为空');
     }
   }
 

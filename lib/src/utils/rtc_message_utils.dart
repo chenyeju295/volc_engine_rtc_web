@@ -37,8 +37,10 @@ class InterruptPriority {
 
 /// RTC消息工具类 - 处理TLV格式的消息和其他消息处理功能
 class RtcMessageUtils {
-  /// 魔术数字 - 'subv'
-  static const int MAGIC_NUMBER = 0x73756276;
+  /// 魔术数字常量 - 各种消息类型的头部标识
+  static const int MAGIC_NUMBER_SUBV = 0x73756276; // 'subv'
+  static const int MAGIC_NUMBER_CONV = 0x636F6E76; // 'conv'
+  static const int MAGIC_NUMBER_FUNC = 0x66756E63; // 'func'
   
   /// 消息类型常量
   static const String TYPE_SUBTITLE = 'subtitle';
@@ -49,36 +51,85 @@ class RtcMessageUtils {
   /// 解析TLV格式的消息
   /// 
   /// 格式: 
-  /// - 4字节魔术数字 'subv'
+  /// - 4字节魔术数字 'subv', 'conv', 或 'func'
   /// - 4字节内容长度
   /// - N字节JSON内容
   static Map<String, dynamic>? parseTlvMessage(Uint8List bytes) {
     try {
       // 检查长度
       if (bytes.length < 8) {
+        debugPrint('RtcMessageUtils: TLV消息太短，不到8字节');
         return null;
       }
       
-      // 检查魔术数字 "subv"
+      // 记录前几个字节用于调试
+      final magicBytes = [bytes[0], bytes[1], bytes[2], bytes[3]];
+      final magicString = String.fromCharCodes(magicBytes);
+      debugPrint('RtcMessageUtils: 消息头部标识: $magicString');
+      
+      // 检查魔术数字
       final int magic = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
-      if (magic != MAGIC_NUMBER) {
+      bool validMagic = false;
+      
+      if (magic == MAGIC_NUMBER_SUBV) {
+        validMagic = true;
+        debugPrint('RtcMessageUtils: 检测到字幕消息 (subv)');
+      } else if (magic == MAGIC_NUMBER_CONV) {
+        validMagic = true;
+        debugPrint('RtcMessageUtils: 检测到对话状态消息 (conv)');
+      } else if (magic == MAGIC_NUMBER_FUNC) {
+        validMagic = true;
+        debugPrint('RtcMessageUtils: 检测到函数调用消息 (func)');
+      }
+      
+      if (!validMagic) {
+        debugPrint('RtcMessageUtils: 无效的魔术数字: 0x${magic.toRadixString(16)}');
         return null;
       }
       
       // 获取内容长度
       final int length = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-      if (bytes.length - 8 < length) {
-        debugPrint('RtcMessageUtils: TLV长度不匹配');
+      debugPrint('RtcMessageUtils: 内容长度: $length');
+      
+      if (length <= 0 || length > 100000) {  // 设置一个合理的最大值
+        debugPrint('RtcMessageUtils: 非法内容长度: $length');
         return null;
       }
       
-      // 提取内容
-      final String content = utf8.decode(bytes.sublist(8, 8 + length));
+      if (bytes.length - 8 < length) {
+        debugPrint('RtcMessageUtils: TLV长度不匹配，标记长度:$length，实际可用:${bytes.length - 8}');
+        // 如果只是轻微不匹配，尝试使用可用的数据
+        if (bytes.length - 8 > 5 && bytes.length - 8 >= length * 0.8) {
+          debugPrint('RtcMessageUtils: 尝试使用截断的消息内容');
+        } else {
+          return null;
+        }
+      }
       
-      // 尝试解析JSON内容
-      return safeParseJson(content);
-    } catch (e) {
+      // 计算实际可用内容长度
+      final int actualLength = bytes.length - 8 < length ? bytes.length - 8 : length;
+      
+      // 提取内容
+      try {
+        final String content = utf8.decode(bytes.sublist(8, 8 + actualLength), allowMalformed: true);
+        debugPrint('RtcMessageUtils: 成功解码TLV内容: ${content.length} 字符');
+        
+        // 尝试解析JSON内容
+        return safeParseJson(content);
+      } catch (decodeError) {
+        debugPrint('RtcMessageUtils: UTF-8解码失败: $decodeError，尝试latin1');
+        // 尝试使用latin1编码
+        try {
+          final String content = latin1.decode(bytes.sublist(8, 8 + actualLength));
+          return safeParseJson(content);
+        } catch (latin1Error) {
+          debugPrint('RtcMessageUtils: latin1解码也失败: $latin1Error');
+          return null;
+        }
+      }
+    } catch (e, stackTrace) {
       debugPrint('RtcMessageUtils: 解析TLV消息出错: $e');
+      debugPrint('堆栈: $stackTrace');
       return null;
     }
   }
@@ -97,10 +148,10 @@ class RtcMessageUtils {
       final Uint8List result = Uint8List(8 + contentLength);
       
       // 写入魔术数字 'subv'
-      result[0] = (MAGIC_NUMBER >> 24) & 0xFF;
-      result[1] = (MAGIC_NUMBER >> 16) & 0xFF;
-      result[2] = (MAGIC_NUMBER >> 8) & 0xFF;
-      result[3] = MAGIC_NUMBER & 0xFF;
+      result[0] = (MAGIC_NUMBER_SUBV >> 24) & 0xFF;
+      result[1] = (MAGIC_NUMBER_SUBV >> 16) & 0xFF;
+      result[2] = (MAGIC_NUMBER_SUBV >> 8) & 0xFF;
+      result[3] = MAGIC_NUMBER_SUBV & 0xFF;
       
       // 写入内容长度
       result[4] = (contentLength >> 24) & 0xFF;

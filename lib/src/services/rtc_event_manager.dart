@@ -235,9 +235,11 @@ class RtcEventManager {
 
   /// 构造函数 - 支持依赖注入
   RtcEventManager({RtcMessageHandler? messageHandler}) {
-    // 如果提供了外部消息处理器实例，则使用外部实例
+    // 初始化消息处理器
     if (messageHandler != null) {
-      // 重要：设置消息处理器的回调
+      _messageHandler = messageHandler;
+      
+      // 设置消息处理器的回调
       messageHandler.onSubtitle = (subtitle) {
         _subtitleController.add(subtitle);
       };
@@ -249,7 +251,14 @@ class RtcEventManager {
       messageHandler.onState = (state) {
         _stateController.add(state);
       };
+    } else {
+      // 如果没有传入消息处理器，创建一个新的
+      _messageHandler = RtcMessageHandler();
+      debugPrint('RtcEventManager: 创建了新的消息处理器实例');
     }
+    
+    // 配置事件映射表
+    _setupEventMap();
   }
 
   /// 设置引擎并初始化事件监听
@@ -264,16 +273,23 @@ class RtcEventManager {
     debugPrint('RtcEventManager: 引擎设置成功');
 
     // 设置消息处理器的引擎
-    _messageHandler.setEngine(rtcClient);
+    if (_messageHandler != null) {
+      try {
+        _messageHandler.setEngine(rtcClient);
+        debugPrint('RtcEventManager: 成功设置消息处理器的引擎');
+      } catch (e) {
+        debugPrint('RtcEventManager: 设置消息处理器的引擎失败: $e');
+        // 继续执行，因为可能消息处理器已在其他地方初始化
+      }
+    } else {
+      debugPrint('RtcEventManager: 警告 - _messageHandler 未初始化');
+    }
 
     // 获取事件常量
     _getEvents();
 
     // 注册事件处理器
     _registerEventHandlers();
-
-    // 配置消息处理器监听
-    _setupMessageHandlerListeners();
 
     // 初始获取设备列表
     _getAudioDevices();

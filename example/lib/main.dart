@@ -162,9 +162,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
           _isInitialized = true;
         });
 
-        // 请求麦克风权限
-        await _requestMicrophoneAccess();
-
         // 设置订阅
         _setupSubscriptions();
       } else {
@@ -175,29 +172,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     } catch (e) {
       setState(() {
         _status = '错误: $e';
-      });
-    }
-  }
-
-  Future<void> _requestMicrophoneAccess() async {
-    setState(() {
-      _status = '正在请求麦克风权限...';
-    });
-
-    try {
-      final result = await RtcAigcPlugin.requestMicrophoneAccess();
-      final success = result is Map ? (result['success'] ?? false) : false;
-
-      setState(() {
-        if (success) {
-          _status = '麦克风权限获取成功';
-        } else {
-          _status = '麦克风权限获取失败，某些功能可能无法使用';
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _status = '麦克风权限请求错误: $e';
       });
     }
   }
@@ -341,10 +315,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
           _status = '已加入房间';
           _isJoined = true;
         });
-
-        // 获取音频设备列表
-        _audioInputDevices = await RtcAigcPlugin.getAudioInputDevices();
-        _audioOutputDevices = await RtcAigcPlugin.getAudioOutputDevices();
       } else {
         setState(() {
           _status = '加入房间失败';

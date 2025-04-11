@@ -715,7 +715,63 @@ class WebUtils {
     }
   }
 
-  /// Convert a binary message to a string
+  /// Convert binary data to Uint8List
+  static Uint8List binaryToUint8List(dynamic binaryData) {
+    try {
+      // If already a Uint8List, return as is
+      if (binaryData is Uint8List) {
+        return binaryData;
+      }
+
+      // Handle ArrayBuffer or TypedArray
+      if (js_util.hasProperty(binaryData, 'byteLength')) {
+        // Create Uint8Array view if data is an ArrayBuffer
+        final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT') 
+            ? binaryData  // Already a TypedArray
+            : js_util.callConstructor(
+                js_util.getProperty(js_util.globalThis, 'Uint8Array'), [binaryData]);
+        
+        // Get the length of the array
+        final int length = js_util.getProperty(uint8Array, 'length');
+        
+        // Create a Uint8List and copy the data
+        final Uint8List result = Uint8List(length);
+        for (int i = 0; i < length; i++) {
+          result[i] = js_util.getProperty(uint8Array, i);
+        }
+        
+        // Log first few bytes for debugging
+        final int debugLength = length > 10 ? 10 : length;
+        List<int> debugBytes = [];
+        for (int i = 0; i < debugLength; i++) {
+          debugBytes.add(result[i]);
+        }
+        debugPrint('First $debugLength bytes: $debugBytes');
+        
+        return result;
+      }
+
+      // Handle Blob
+      if (js_util.instanceOfString(binaryData, 'Blob')) {
+        debugPrint('Warning: Sync conversion of Blob not supported, returning empty Uint8List');
+        return Uint8List(0);
+      }
+
+      // Try direct conversion for other types
+      if (binaryData is List<int>) {
+        return Uint8List.fromList(binaryData);
+      }
+
+      // If all else fails, return empty Uint8List
+      debugPrint('Warning: Unable to convert binary data to Uint8List, type: ${binaryData.runtimeType}');
+      return Uint8List(0);
+    } catch (e) {
+      debugPrint('Error converting binary to Uint8List: $e');
+      return Uint8List(0);
+    }
+  }
+
+  /// Convert a binary message to a string with robust error handling
   static String binaryToString(dynamic binaryData) {
     try {
       // First check if it's already a string
@@ -723,76 +779,81 @@ class WebUtils {
         return binaryData;
       }
 
-      // Check if it's a Uint8Array or ArrayBuffer
-      if (js_util.hasProperty(binaryData, 'byteLength')) {
-        try {
-          // First try using TextDecoder with error handling
-          final textDecoder = js_util.callConstructor(
-              js_util.getProperty(js_util.globalThis, 'TextDecoder'), 
-              ['utf-8', js_util.jsify({'fatal': false, 'ignoreBOM': true})]);
-
-          final result = js_util.callMethod(textDecoder, 'decode', [binaryData]);
-          
-          // Validate the result
-          if (result is String && result.isNotEmpty) {
-            // Check for replacement characters that indicate decoding problems
-            if (result.contains('\uFFFD')) {
-              debugPrint('Warning: Binary data contains replacement characters, possible encoding issues');
-            }
-            return result;
-          }
-        } catch (decodingError) {
-          debugPrint('Error using TextDecoder: $decodingError, falling back to alternative method');
-        }
-        
-        // Fallback to array-based conversion
-        try {
-          // Create Uint8Array view if data is an ArrayBuffer
-          final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT') 
-              ? binaryData  // Already a TypedArray
-              : js_util.callConstructor(
-                  js_util.getProperty(js_util.globalThis, 'Uint8Array'), [binaryData]);
-          
-          // Get the length of the array
-          final int length = js_util.getProperty(uint8Array, 'length');
-          
-          // Create a list of bytes
-          final List<int> bytes = List<int>.filled(length, 0);
-          for (int i = 0; i < length; i++) {
-            bytes[i] = js_util.getProperty(uint8Array, i);
-          }
-          
-          // Try decoding using utf8
-          try {
-            final result = utf8.decode(bytes, allowMalformed: true);
-            return result;
-          } catch (utf8Error) {
-            debugPrint('UTF-8 decoding failed: $utf8Error, trying latin1');
-            // Try latin1 as a last resort
-            return latin1.decode(bytes);
-          }
-        } catch (arrayError) {
-          debugPrint('Error converting array: $arrayError');
-        }
-      }
-
-      // Extract string from blob for blob types
-      if (js_util.instanceOfString(binaryData, 'Blob')) {
-        debugPrint('Detected Blob type, using FileReader approach');
-        // This is async but we're returning sync - log a warning
-        debugPrint('Warning: Sync conversion of Blob not supported, returning empty string');
-        return '';
-      }
-
-      // Try direct toString conversion as fallback
-      final String stringResult = binaryData.toString();
-      if (stringResult == '[object Object]') {
-        // This indicates a generic Object.toString result, not useful
-        debugPrint('Warning: Unable to meaningfully convert binary data to string');
+      // First convert to Uint8List for consistent handling
+      final Uint8List bytes = binaryToUint8List(binaryData);
+      
+      if (bytes.isEmpty) {
+        debugPrint('Empty binary data');
         return '';
       }
       
-      return stringResult;
+      // Check for TLV format markers based on known message types
+      // The first 4 bytes might be 'conv', 'subv', or 'func'
+      if (bytes.length >= 4) {
+        final String magicString = String.fromCharCodes(bytes.sublist(0, 4));
+        debugPrint('Magic string: $magicString');
+        
+        if (magicString == 'conv' || magicString == 'subv' || magicString == 'func') {
+          // This might be a TLV format message - we need to parse only the content portion
+          if (bytes.length >= 8) {
+            // Get content length from TLV header
+            final int contentLength = 
+                (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+                
+            debugPrint('TLV content length: $contentLength');
+            
+            if (contentLength > 0 && bytes.length >= (8 + contentLength)) {
+              // Extract content portion
+              final contentBytes = bytes.sublist(8, 8 + contentLength);
+              
+              try {
+                // Try utf8 decoding first
+                final String result = utf8.decode(contentBytes);
+                debugPrint('Successfully decoded TLV content as UTF-8');
+                return result;
+              } catch (utf8Error) {
+                debugPrint('UTF-8 decoding failed for TLV content: $utf8Error');
+                // Fall through to the regular decoding below
+              }
+            }
+          }
+        }
+      }
+      
+      // Try multiple decoding approaches
+      // 1. UTF-8 with replacement
+      try {
+        return utf8.decode(bytes, allowMalformed: true);
+      } catch (e) {
+        debugPrint('UTF-8 decoding failed: $e');
+      }
+      
+      // 2. Try latin1 as a fallback
+      try {
+        return latin1.decode(bytes);
+      } catch (e) {
+        debugPrint('latin1 decoding failed: $e');
+      }
+      
+      // 3. Try extracting JSON if present
+      final String rawText = String.fromCharCodes(bytes);
+      final int jsonStart = rawText.indexOf('{');
+      final int jsonEnd = rawText.lastIndexOf('}');
+      
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        final String jsonPart = rawText.substring(jsonStart, jsonEnd + 1);
+        try {
+          // Validate if it's valid JSON
+          json.decode(jsonPart);
+          debugPrint('Successfully extracted JSON part from binary data');
+          return jsonPart;
+        } catch (e) {
+          debugPrint('Extracted text is not valid JSON: $e');
+        }
+      }
+      
+      // 4. Last resort: just return the raw string with replacement characters
+      return rawText;
     } catch (e) {
       debugPrint('Error converting binary to string: $e');
       return '';
@@ -877,54 +938,6 @@ class WebUtils {
     } catch (e) {
       debugPrint('Error getting audio output devices: $e');
       return [];
-    }
-  }
-
-  /// Convert binary data to Uint8List
-  static Uint8List binaryToUint8List(dynamic binaryData) {
-    try {
-      // If already a Uint8List, return as is
-      if (binaryData is Uint8List) {
-        return binaryData;
-      }
-
-      // Handle ArrayBuffer or TypedArray
-      if (js_util.hasProperty(binaryData, 'byteLength')) {
-        // Create Uint8Array view if data is an ArrayBuffer
-        final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT') 
-            ? binaryData  // Already a TypedArray
-            : js_util.callConstructor(
-                js_util.getProperty(js_util.globalThis, 'Uint8Array'), [binaryData]);
-        
-        // Get the length of the array
-        final int length = js_util.getProperty(uint8Array, 'length');
-        
-        // Create a Uint8List and copy the data
-        final Uint8List result = Uint8List(length);
-        for (int i = 0; i < length; i++) {
-          result[i] = js_util.getProperty(uint8Array, i);
-        }
-        
-        return result;
-      }
-
-      // Handle Blob
-      if (js_util.instanceOfString(binaryData, 'Blob')) {
-        debugPrint('Warning: Sync conversion of Blob not supported, returning empty Uint8List');
-        return Uint8List(0);
-      }
-
-      // Try direct conversion for other types
-      if (binaryData is List<int>) {
-        return Uint8List.fromList(binaryData);
-      }
-
-      // If all else fails, return empty Uint8List
-      debugPrint('Warning: Unable to convert binary data to Uint8List');
-      return Uint8List(0);
-    } catch (e) {
-      debugPrint('Error converting binary to Uint8List: $e');
-      return Uint8List(0);
     }
   }
 }

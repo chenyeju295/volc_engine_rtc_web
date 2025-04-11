@@ -36,28 +36,6 @@ class RtcDeviceManager {
     }
   }
 
-  /// 请求麦克风权限
-  Future<bool> requestMicrophonePermission() async {
-    try {
-      if (engine == null) {
-        debugPrint('RtcDeviceManager: 引擎未设置');
-        return false;
-      }
-
-      final result = await WebUtils.callMethodAsync(
-        engine,
-        'requestMicrophonePermission',
-        [],
-      );
-
-      _hasAudioInputPermission = result == true;
-      return _hasAudioInputPermission;
-    } catch (e) {
-      debugPrint('RtcDeviceManager: 请求麦克风权限失败: $e');
-      return false;
-    }
-  }
-
   /// 获取音频输入设备列表
   Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
     try {
@@ -83,81 +61,6 @@ class RtcDeviceManager {
     }
   }
 
-  /// 获取音频输出设备列表
-  Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
-    try {
-      if (engine == null) {
-        debugPrint('RtcDeviceManager: 引擎未设置');
-        return [];
-      }
-
-      final devices = await WebUtils.callMethodAsync(
-        engine,
-        'getAudioOutputDevices',
-        [],
-      );
-
-      if (devices != null) {
-        _audioOutputDevices = List<Map<String, dynamic>>.from(devices);
-      }
-
-      return _audioOutputDevices;
-    } catch (e) {
-      debugPrint('RtcDeviceManager: 获取音频输出设备列表失败: $e');
-      return [];
-    }
-  }
-
-  /// 设置音频采集设备
-  Future<bool> setAudioCaptureDevice(String deviceId) async {
-    try {
-      if (engine == null) {
-        debugPrint('RtcDeviceManager: 引擎未设置');
-        return false;
-      }
-
-      final success = await WebUtils.callMethodAsync(
-        engine,
-        'setAudioCaptureDevice',
-        [deviceId],
-      );
-
-      if (success == true) {
-        _selectedAudioInputDeviceId = deviceId;
-      }
-
-      return success == true;
-    } catch (e) {
-      debugPrint('RtcDeviceManager: 设置音频采集设备失败: $e');
-      return false;
-    }
-  }
-
-  /// 设置音频播放设备
-  Future<bool> setAudioPlaybackDevice(String deviceId) async {
-    try {
-      if (engine == null) {
-        debugPrint('RtcDeviceManager: 引擎未设置');
-        return false;
-      }
-
-      final success = await WebUtils.callMethodAsync(
-        engine,
-        'setAudioPlaybackDevice',
-        [deviceId],
-      );
-
-      if (success == true) {
-        _selectedAudioOutputDeviceId = deviceId;
-      }
-
-      return success == true;
-    } catch (e) {
-      debugPrint('RtcDeviceManager: 设置音频播放设备失败: $e');
-      return false;
-    }
-  }
-
   /// 开始音频采集
   Future<bool> startAudioCapture({String? deviceId}) async {
     try {
@@ -169,15 +72,6 @@ class RtcDeviceManager {
       if (_isCapturingAudio) {
         debugPrint('RtcDeviceManager: 已在采集音频');
         return true;
-      }
-
-      // 如果指定了设备ID，先设置设备
-      if (deviceId != null) {
-        final setDeviceSuccess = await setAudioCaptureDevice(deviceId);
-        if (!setDeviceSuccess) {
-          debugPrint('RtcDeviceManager: 设置音频采集设备失败');
-          return false;
-        }
       }
 
       final success = await WebUtils.callMethodAsync(
@@ -292,4 +186,11 @@ class RtcDeviceManager {
   List<Map<String, dynamic>> get audioOutputDevices => _audioOutputDevices;
   String? get selectedAudioInputDeviceId => _selectedAudioInputDeviceId;
   String? get selectedAudioOutputDeviceId => _selectedAudioOutputDeviceId;
+  
+  /// 设置音频采集状态标志
+  /// @param isCapturing 是否正在采集音频
+  void setCapturingAudioStatus(bool isCapturing) {
+    _isCapturingAudio = isCapturing;
+    debugPrint('RtcDeviceManager: 音频采集状态已更新为 ${isCapturing ? "采集中" : "未采集"}');
+  }
 }

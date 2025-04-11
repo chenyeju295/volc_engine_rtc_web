@@ -74,6 +74,11 @@ class RtcMessageHandler {
     try {
       debugPrint('【消息处理器】开始处理二进制消息，用户ID: $userId');
 
+      if (message == null) {
+        debugPrint('【消息处理器】收到null消息，无法处理');
+        return;
+      }
+
       // 将消息转换为Uint8List
       final bytes = WebUtils.binaryToUint8List(message);
       if (bytes.isEmpty) {
@@ -84,30 +89,86 @@ class RtcMessageHandler {
       debugPrint('【消息处理器】消息长度: ${bytes.length} 字节');
 
       // 检查消息类型 - 查看前几个字节用于调试
+      String magicString = "";
       if (bytes.length >= 4) {
         final magicBytes = [bytes[0], bytes[1], bytes[2], bytes[3]];
-        final magicString = String.fromCharCodes(magicBytes);
+        magicString = String.fromCharCodes(magicBytes);
         debugPrint('【消息处理器】消息头部标识: $magicString');
       }
 
-      // 解析TLV消息
+      // 尝试多种方式解析消息
+      Map<String, dynamic>? parsedData;
+      
+      // 1. 首先尝试作为TLV消息解析
       final parsedTlvMessage = RtcMessageUtils.parseTlvMessage(bytes);
       if (parsedTlvMessage != null) {
         debugPrint('【消息处理器】TLV消息解析成功，类型: ${parsedTlvMessage["type"]}');
-        _processTextOrJson(parsedTlvMessage);
-      } else {
-        // 尝试作为字符串处理
-        final jsonString = WebUtils.binaryToString(message);
-        if (jsonString != null && jsonString.isNotEmpty) {
-          debugPrint(
-              '【消息处理器】尝试作为字符串处理: ${jsonString.substring(0, jsonString.length > 50 ? 50 : jsonString.length)}...');
-          final parsedJson = RtcMessageUtils.safeParseJson(jsonString);
-          if (parsedJson != null) {
-            debugPrint('【消息处理器】字符串JSON解析成功');
-            _processTextOrJson(parsedJson);
+        parsedData = parsedTlvMessage;
+      } 
+      // 2. 如果TLV解析失败，尝试直接作为字符串处理
+      else {
+        // 通过预检查判断是否可能是已知格式
+        final bool mightBeJson = magicString == "{\"st" || 
+                                  magicString == "conv" || 
+                                  magicString == "subv" || 
+                                  magicString == "func" || 
+                                  bytes.indexOf(123) >= 0; // 123是'{'的ASCII
+        
+        if (mightBeJson) {
+          debugPrint('【消息处理器】尝试作为JSON字符串处理');
+          final jsonString = WebUtils.binaryToString(message);
+          if (jsonString.isNotEmpty) {
+            final int previewLength = jsonString.length > 100 ? 100 : jsonString.length;
+            debugPrint('【消息处理器】字符串预览: ${jsonString.substring(0, previewLength)}...');
+            
+            // 如果字符串包含JSON对象的起始和结束标记，尝试提取
+            if (jsonString.contains('{') && jsonString.contains('}')) {
+              final int jsonStart = jsonString.indexOf('{');
+              final int jsonEnd = jsonString.lastIndexOf('}') + 1;
+              if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                final String jsonPart = jsonString.substring(jsonStart, jsonEnd);
+                try {
+                  parsedData = RtcMessageUtils.safeParseJson(jsonPart);
+                  if (parsedData != null) {
+                    debugPrint('【消息处理器】成功提取并解析JSON部分');
+                  }
+                } catch (e) {
+                  debugPrint('【消息处理器】JSON部分提取失败: $e');
+                }
+              }
+            }
+            
+            // 如果上面的提取失败，尝试直接解析整个字符串
+            if (parsedData == null) {
+              parsedData = RtcMessageUtils.safeParseJson(jsonString);
+              if (parsedData != null) {
+                debugPrint('【消息处理器】字符串JSON解析成功');
+              }
+            }
           }
+        }
+      }
+
+      // 处理解析结果
+      if (parsedData != null) {
+        _processTextOrJson(parsedData);
+      } else {
+        // 最后尝试作为原始字符串尝试查找 status 等字段
+        final String rawString = WebUtils.binaryToString(message);
+        if (rawString.contains("status") || rawString.contains("state")) {
+          debugPrint('【消息处理器】尝试作为含状态信息的原始字符串处理');
+          // 创建一个简单的状态消息
+          final Map<String, dynamic> stateMessage = {
+            'type': 'conv',
+            'status': rawString.contains("THINKING") ? "THINKING" :
+                     rawString.contains("SPEAKING") ? "SPEAKING" : 
+                     rawString.contains("FINISHED") ? "FINISHED" : 
+                     rawString.contains("INTERRUPTED") ? "INTERRUPTED" : "UNKNOWN",
+            'timestamp': DateTime.now().millisecondsSinceEpoch
+          };
+          _processTextOrJson(stateMessage);
         } else {
-          debugPrint('【消息处理器】消息无法解析为TLV或字符串JSON格式');
+          debugPrint('【消息处理器】消息无法解析为任何已知格式');
         }
       }
     } catch (e, stackTrace) {

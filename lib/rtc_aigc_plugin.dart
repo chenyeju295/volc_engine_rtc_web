@@ -97,6 +97,24 @@ class RtcAigcPlugin {
   /// Initialize the plugin
   static Future<bool> initialize({required AigcConfig config}) async {
     try {
+      // Ensure we don't initialize twice
+      if (_rtcService != null) {
+        debugPrint('RTC AIGC plugin already initialized');
+        return true;
+      }
+
+      debugPrint('Initializing RTC AIGC plugin...');
+
+      // Pre-check SDK status for diagnostics
+      try {
+        debugPrint('Pre-checking SDK loading status...');
+        final isSdkLoaded = await WebUtils.isSdkLoaded();
+        debugPrint(
+            'SDK pre-check result: ${isSdkLoaded ? "loaded" : "not loaded"}');
+      } catch (e) {
+        debugPrint('SDK pre-check error (non-fatal): $e');
+      }
+
       // Create necessary internal components
       final engineManager = RtcEngineManager(config: config);
       final messageHandler = RtcMessageHandler();
@@ -112,8 +130,16 @@ class RtcAigcPlugin {
         messageHandler: messageHandler,
       );
 
-      debugPrint('Initialize RTC AIGC plugin');
+      // Explicitly initialize the RtcService
+      debugPrint('Starting RtcService initialization sequence...');
       final success = await _rtcService!.initialize();
+
+      if (success) {
+        debugPrint('RTC AIGC plugin initialized successfully');
+      } else {
+        debugPrint('RTC AIGC plugin initialization failed');
+      }
+
       return success;
     } catch (e) {
       debugPrint('Failed to initialize RTC AIGC plugin: $e');
@@ -385,42 +411,6 @@ class RtcAigcPlugin {
     }
   }
 
-  /// 设置音频输入设备
-  static Future<bool> setAudioInputDevice(String deviceId) async {
-    try {
-      if (_rtcService != null) {
-        return await _rtcService!.setAudioCaptureDevice(deviceId);
-      } else {
-        final result = await _channel
-            .invokeMethod('setAudioInputDevice', {'deviceId': deviceId});
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
-      }
-    } catch (e) {
-      debugPrint('Error setting audio input device: $e');
-      return false;
-    }
-  }
-
-  /// 设置音频输出设备
-  static Future<bool> setAudioOutputDevice(String deviceId) async {
-    try {
-      if (_rtcService != null) {
-        return await _rtcService!.setAudioPlaybackDevice(deviceId);
-      } else {
-        final result = await _channel
-            .invokeMethod('setAudioOutputDevice', {'deviceId': deviceId});
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
-      }
-    } catch (e) {
-      debugPrint('Error setting audio output device: $e');
-      return false;
-    }
-  }
-
   /// 发送文本消息给AI
   static Future<bool> sendMessage(String message) async {
     try {
@@ -466,105 +456,18 @@ class RtcAigcPlugin {
     }
   }
 
-  /// Get available audio input devices (microphones)
-  static Future<List<Map<String, String>>> getAudioInputDevices() async {
-    try {
-      if (_rtcService != null) {
-        final devices = await _rtcService!.getAudioInputDevices();
-        return devices.map((e) => Map<String, String>.from(e)).toList();
-      } else {
-        final result = await _channel.invokeMethod('getAudioInputDevices');
-
-        if (result is List) {
-          return result.map((e) => Map<String, String>.from(e)).toList();
-        } else if (result is Map && result['devices'] is List) {
-          return (result['devices'] as List)
-              .map((e) => Map<String, String>.from(e))
-              .toList();
-        }
-
-        return [];
-      }
-    } catch (e) {
-      debugPrint('Error getting audio input devices: $e');
-      return [];
-    }
-  }
-
-  /// Get available audio output devices (speakers)
-  static Future<List<Map<String, String>>> getAudioOutputDevices() async {
-    try {
-      if (_rtcService != null) {
-        final devices = await _rtcService!.getAudioOutputDevices();
-        return devices.map((e) => Map<String, String>.from(e)).toList();
-      } else {
-        final result = await _channel.invokeMethod('getAudioOutputDevices');
-
-        if (result is List) {
-          return result.map((e) => Map<String, String>.from(e)).toList();
-        } else if (result is Map && result['devices'] is List) {
-          return (result['devices'] as List)
-              .map((e) => Map<String, String>.from(e))
-              .toList();
-        }
-
-        return [];
-      }
-    } catch (e) {
-      debugPrint('Error getting audio output devices: $e');
-      return [];
-    }
-  }
-
-  /// Get the current audio input device ID
-  static Future<String?> getCurrentAudioInputDevice() async {
-    try {
-      if (_rtcService != null) {
-        return await _rtcService!.getCurrentAudioInputDeviceId();
-      } else {
-        return await _channel.invokeMethod('getCurrentAudioInputDevice');
-      }
-    } catch (e) {
-      debugPrint('Error getting current audio input device: $e');
-      return null;
-    }
-  }
-
-  /// Get the current audio output device ID
-  static Future<String?> getCurrentAudioOutputDevice() async {
-    try {
-      if (_rtcService != null) {
-        return await _rtcService!.getCurrentAudioOutputDeviceId();
-      } else {
-        return await _channel.invokeMethod('getCurrentAudioOutputDevice');
-      }
-    } catch (e) {
-      debugPrint('Error getting current audio output device: $e');
-      return null;
-    }
-  }
-
-  /// Request access to microphone
-  static Future<Map<String, dynamic>> requestMicrophoneAccess() async {
-    try {
-      if (_rtcService != null) {
-        final success = await _rtcService!.requestCameraAccess();
-        return {'success': success};
-      } else {
-        final result = await _channel.invokeMethod('requestMicrophoneAccess');
-        return result is Map<String, dynamic> ? result : {'success': result};
-      }
-    } catch (e) {
-      debugPrint('Error requesting microphone access: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
   /// 开始音频采集
-  static Future<bool> startAudioCapture({String? deviceId}) async {
+  static Future<Object> startAudioCapture({String? deviceId}) async {
     try {
       if (_rtcService != null) {
-        return await _rtcService!.startAudioCapture(deviceId);
+        final result = await _rtcService!.startAudioCapture(deviceId);
+        // 检查返回值类型，转换为布尔值
+        if (result is bool) {
+          return result;
+        } else
+          return result['success'] == true;
+
+        return false;
       } else {
         final result = await _channel
             .invokeMethod('startAudioCapture', {'deviceId': deviceId});
@@ -582,7 +485,14 @@ class RtcAigcPlugin {
   static Future<bool> stopAudioCapture() async {
     try {
       if (_rtcService != null) {
-        return await _rtcService!.stopAudioCapture();
+        final result = await _rtcService!.stopAudioCapture();
+        // 检查返回值类型，转换为布尔值
+        if (result is bool) {
+          return result;
+        } else if (result is Map<String, dynamic>) {
+          return result['success'] == true;
+        }
+        return false;
       } else {
         final result = await _channel.invokeMethod('stopAudioCapture');
         return result is bool
@@ -596,14 +506,26 @@ class RtcAigcPlugin {
   }
 
   /// 静音/取消静音
-  static Future<bool> muteAudio(bool mute) async {
+  static Future<Object> muteAudio(bool mute) async {
     try {
       if (_rtcService != null) {
         // 通过停止/开始音频采集来实现静音
         if (mute) {
-          return await _rtcService!.stopAudioCapture();
+          final result = await _rtcService!.stopAudioCapture();
+          if (result is bool) {
+            return result;
+          } else if (result is Map<String, dynamic>) {
+            return result['success'] == true;
+          }
+          return false;
         } else {
-          return await _rtcService!.startAudioCapture(null);
+          final result = await _rtcService!.startAudioCapture(null);
+          if (result is bool) {
+            return result;
+          } else
+            return result['success'] == true;
+
+          return false;
         }
       } else {
         final result = await _channel.invokeMethod('muteAudio', {'mute': mute});
