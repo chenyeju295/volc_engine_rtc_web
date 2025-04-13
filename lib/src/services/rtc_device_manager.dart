@@ -7,6 +7,63 @@ import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
 import '../../rtc_aigc_plugin.dart';
 
+/// 音频操作结果类，统一返回格式
+class AudioResult {
+  final bool success;
+  final String? errorCode;
+  final String? errorMessage;
+  final Map<String, dynamic>? trackSettings;
+  
+  AudioResult({
+    required this.success, 
+    this.errorCode, 
+    this.errorMessage, 
+    this.trackSettings
+  });
+  
+  /// 转换为Map，便于序列化和传递
+  Map<String, dynamic> toMap() {
+    return {
+      'success': success,
+      if (errorCode != null) 'errorCode': errorCode,
+      if (errorMessage != null) 'error': errorMessage,
+      if (trackSettings != null) 'trackSettings': trackSettings,
+    };
+  }
+  
+  /// 从布尔值创建成功结果
+  factory AudioResult.fromBool(bool result) {
+    return AudioResult(success: result);
+  }
+  
+  /// 创建失败结果
+  factory AudioResult.failure(String errorMessage, [String? errorCode]) {
+    return AudioResult(
+      success: false,
+      errorMessage: errorMessage,
+      errorCode: errorCode ?? 'UNKNOWN_ERROR'
+    );
+  }
+  
+  /// 创建成功结果
+  factory AudioResult.success([Map<String, dynamic>? trackSettings]) {
+    return AudioResult(
+      success: true,
+      trackSettings: trackSettings
+    );
+  }
+}
+
+/// 音频错误码常量
+class AudioErrorCode {
+  static const String UNKNOWN_ERROR = 'UNKNOWN_ERROR';
+  static const String REPEAT_CAPTURE = 'REPEAT_CAPTURE';
+  static const String GET_AUDIO_TRACK_FAILED = 'GET_AUDIO_TRACK_FAILED';
+  static const String STREAM_TYPE_NOT_MATCH = 'STREAM_TYPE_NOT_MATCH';
+  static const String ENGINE_NOT_INITIALIZED = 'ENGINE_NOT_INITIALIZED';
+  static const String NOT_IN_ROOM = 'NOT_IN_ROOM';
+}
+
 /// 管理RTC设备相关操作的类
 class RtcDeviceManager {
   /// 引擎管理器引用
@@ -25,11 +82,66 @@ class RtcDeviceManager {
   /// 选中的设备ID
   String? _selectedAudioInputDeviceId;
   String? _selectedAudioOutputDeviceId;
+  
+  /// 状态流控制器
+  final StreamController<bool> _audioStatusController = 
+      StreamController<bool>.broadcast();
+  
+  /// 设备变更流控制器
+  final StreamController<List<Map<String, dynamic>>> _deviceChangeController = 
+      StreamController<List<Map<String, dynamic>>>.broadcast();
 
   /// 构造函数
   RtcDeviceManager({
     required this.engineManager,
-  });
+  }) {
+    // 不再自动调用_setupDeviceListener
+  }
+  
+  /// 设置设备变更监听 - 移除定时刷新逻辑
+  void _setupDeviceListener() {
+    // 移除定时器逻辑，改为手动调用
+    // 可以在这里添加原生设备变更事件监听（如果平台支持）
+  }
+  
+  /// 刷新设备列表 - 需要用户手动调用
+  /// 
+  /// 手动获取当前可用的音频设备列表，并在设备发生变化时发送通知
+  /// @return 可用的音频输入设备列表
+  Future<List<Map<String, dynamic>>> refreshDevices() async {
+    try {
+      final oldDevices = List<Map<String, dynamic>>.from(_audioInputDevices);
+      await getAudioInputDevices();
+      
+      // 同时获取输出设备
+      await getAudioOutputDevices();
+      
+      // 检查设备列表是否有变化
+      if (_audioInputDevices.length != oldDevices.length) {
+        _deviceChangeController.add(_audioInputDevices);
+      } else {
+        // 检查设备ID是否有变化
+        bool changed = false;
+        for (int i = 0; i < _audioInputDevices.length; i++) {
+          if (i >= oldDevices.length || 
+              _audioInputDevices[i]['deviceId'] != oldDevices[i]['deviceId']) {
+            changed = true;
+            break;
+          }
+        }
+        
+        if (changed) {
+          _deviceChangeController.add(_audioInputDevices);
+        }
+      }
+      
+      return _audioInputDevices;
+    } catch (e) {
+      debugPrint('刷新设备列表失败: $e');
+      return [];
+    }
+  }
+  
   void setEngine(dynamic rtcClient) {
     if (engine == null) {
       engineManager.engine = (rtcClient);
@@ -44,14 +156,19 @@ class RtcDeviceManager {
         return [];
       }
 
-      final devices = await WebUtils.callMethodAsync(
-        engine,
-        'getAudioInputDevices',
-        [],
-      );
-
-      if (devices != null) {
-        _audioInputDevices = List<Map<String, dynamic>>.from(devices);
+      final devices = await WebUtils.getAudioInputDevices();
+      if (devices.isNotEmpty) {
+        _audioInputDevices = [];
+        for (var device in devices) {
+          try {
+            final deviceObj = js_util.dartify(device);
+            if (deviceObj is Map) {
+              _audioInputDevices.add(Map<String, dynamic>.from(deviceObj));
+            }
+          } catch (e) {
+            debugPrint('设备数据转换失败: $e');
+          }
+        }
       }
 
       return _audioInputDevices;
@@ -60,58 +177,234 @@ class RtcDeviceManager {
       return [];
     }
   }
-
-  /// 开始音频采集
-  Future<bool> startAudioCapture({String? deviceId}) async {
+  
+  /// 获取音频输出设备列表
+  Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
     try {
       if (engine == null) {
         debugPrint('RtcDeviceManager: 引擎未设置');
-        return false;
+        return [];
+      }
+
+      final devices = await WebUtils.getAudioOutputDevices();
+      if (devices.isNotEmpty) {
+        _audioOutputDevices = [];
+        for (var device in devices) {
+          try {
+            final deviceObj = js_util.dartify(device);
+            if (deviceObj is Map) {
+              _audioOutputDevices.add(Map<String, dynamic>.from(deviceObj));
+            }
+          } catch (e) {
+            debugPrint('设备数据转换失败: $e');
+          }
+        }
+      }
+
+      return _audioOutputDevices;
+    } catch (e) {
+      debugPrint('RtcDeviceManager: 获取音频输出设备列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 开始音频采集
+  /// 
+  /// 开启内部音频采集。默认为关闭状态。
+  /// 内部采集是指：使用 RTC SDK 内置采集机制进行音频采集。
+  /// 可见用户进房后调用该方法，房间中的其他用户会收到 onUserStartAudioCapture 的回调。
+  /// 
+  /// @param deviceId 设备 ID，传入采集音频的设备 ID，以免出现无声等异常。可通过 getAudioInputDevices 获取设备列表。
+  /// @return 统一的AudioResult对象，包含操作结果和错误信息
+  Future<AudioResult> startAudioCapture({String? deviceId}) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
       }
 
       if (_isCapturingAudio) {
         debugPrint('RtcDeviceManager: 已在采集音频');
-        return true;
+        return AudioResult.failure('重复采集', AudioErrorCode.REPEAT_CAPTURE);
+      }
+      
+      // 如果指定了设备ID，先设置设备
+      if (deviceId != null && deviceId.isNotEmpty) {
+        try {
+          await js_util.promiseToFuture(
+            js_util.callMethod(engine, 'setAudioCaptureDevice', [deviceId])
+          );
+          _selectedAudioInputDeviceId = deviceId;
+          debugPrint('已设置音频采集设备: $deviceId');
+        } catch (e) {
+          debugPrint('设置音频采集设备失败: $e');
+          // 继续尝试开启采集，使用默认设备
+        }
       }
 
-      final success = await WebUtils.callMethodAsync(
-        engine,
-        'startAudioCapture',
-        [],
-      );
-
-      _isCapturingAudio = success == true;
-      return _isCapturingAudio;
+      try {
+        // 调用原生startAudioCapture方法
+        final resultPromise = js_util.callMethod(engine, 'startAudioCapture', []);
+        final trackSettings = await js_util.promiseToFuture(resultPromise);
+        
+        // 转换音频轨道设置为Dart Map
+        Map<String, dynamic>? settings;
+        if (trackSettings != null) {
+          try {
+            final settingsObj = js_util.dartify(trackSettings);
+            if (settingsObj is Map) {
+              settings = Map<String, dynamic>.from(settingsObj);
+            }
+          } catch (e) {
+            debugPrint('音频轨道设置转换失败: $e');
+          }
+        }
+        
+        _isCapturingAudio = true;
+        _audioStatusController.add(true);
+        
+        debugPrint('音频采集启动成功${settings != null ? ": $settings" : ""}');
+        return AudioResult.success(settings);
+      } catch (e) {
+        // 解析常见错误
+        String errorMsg = e.toString();
+        String errorCode = AudioErrorCode.UNKNOWN_ERROR;
+        
+        if (errorMsg.contains('REPEAT_CAPTURE')) {
+          errorCode = AudioErrorCode.REPEAT_CAPTURE;
+          errorMsg = '重复采集';
+        } else if (errorMsg.contains('GET_AUDIO_TRACK_FAILED') || 
+                   errorMsg.contains('Cannot read property') || 
+                   errorMsg.contains('获取音频Track失败')) {
+          errorCode = AudioErrorCode.GET_AUDIO_TRACK_FAILED;
+          errorMsg = '采集音频失败，请确认是否有可用的采集设备，或是否被其他应用占用';
+        } else if (errorMsg.contains('STREAM_TYPE_NOT_MATCH')) {
+          errorCode = AudioErrorCode.STREAM_TYPE_NOT_MATCH;
+          errorMsg = '流类型不匹配。调用setAudioSourceType设置了自定义媒体源后，又调用内部采集相关的接口';
+        }
+        
+        debugPrint('音频采集启动失败: [$errorCode] $errorMsg');
+        return AudioResult.failure(errorMsg, errorCode);
+      }
     } catch (e) {
-      debugPrint('RtcDeviceManager: 开始音频采集失败: $e');
-      return false;
+      debugPrint('开启音频采集过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
     }
   }
 
   /// 停止音频采集
-  Future<bool> stopAudioCapture() async {
+  /// 
+  /// 立即关闭内部音频采集。
+  /// 发布流后调用该方法，房间内的其他用户会收到 onUserStopAudioCapture 的回调。
+  /// 
+  /// 注意：
+  /// - 调用 startAudioCapture 可以开启内部音频采集。
+  /// - 如果不调用本方法停止内部音频采集，则只有当销毁引擎实例时，内部音频采集才会停止。
+  /// 
+  /// @return 统一的AudioResult对象，包含操作结果和错误信息
+  Future<AudioResult> stopAudioCapture() async {
     try {
       if (engine == null) {
         debugPrint('RtcDeviceManager: 引擎未设置');
-        return false;
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
       }
 
       if (!_isCapturingAudio) {
         debugPrint('RtcDeviceManager: 未在采集音频');
-        return true;
+        return AudioResult.success();
       }
 
-      final success = await WebUtils.callMethodAsync(
-        engine,
-        'stopAudioCapture',
-        [],
-      );
-
-      _isCapturingAudio = !(success == true);
-      return success == true;
+      try {
+        // 调用原生stopAudioCapture方法
+        final resultPromise = js_util.callMethod(engine, 'stopAudioCapture', []);
+        await js_util.promiseToFuture(resultPromise);
+        
+        _isCapturingAudio = false;
+        _audioStatusController.add(false);
+        
+        debugPrint('音频采集停止成功');
+        return AudioResult.success();
+      } catch (e) {
+        // 解析常见错误
+        String errorMsg = e.toString();
+        String errorCode = AudioErrorCode.UNKNOWN_ERROR;
+        
+        if (errorMsg.contains('STREAM_TYPE_NOT_MATCH')) {
+          errorCode = AudioErrorCode.STREAM_TYPE_NOT_MATCH;
+          errorMsg = '流类型不匹配。调用setAudioSourceType设置了自定义媒体源后，又调用内部采集相关的接口';
+        }
+        
+        debugPrint('音频采集停止失败: [$errorCode] $errorMsg');
+        return AudioResult.failure(errorMsg, errorCode);
+      }
     } catch (e) {
-      debugPrint('RtcDeviceManager: 停止音频采集失败: $e');
-      return false;
+      debugPrint('停止音频采集过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+
+  /// 切换音频设备
+  /// @param deviceId 音频设备ID
+  /// @return 成功返回true，失败返回false
+  Future<AudioResult> switchAudioDevice(String deviceId) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+
+      debugPrint('切换音频设备: $deviceId');
+      
+      try {
+        // 设置音频采集设备
+        await js_util.promiseToFuture(
+          js_util.callMethod(engine, 'setAudioCaptureDevice', [deviceId])
+        );
+        
+        _selectedAudioInputDeviceId = deviceId;
+        debugPrint('音频设备切换成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('切换音频设备失败: $e');
+        return AudioResult.failure('切换音频设备失败: $e');
+      }
+    } catch (e) {
+      debugPrint('切换音频设备过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+
+  /// 设置音频采集音量
+  /// @param volume 音量大小，范围[0-100]
+  /// @return 成功返回true，失败返回false
+  Future<AudioResult> setAudioCaptureVolume(int volume) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+
+      // 确保音量在正确范围内
+      final int safeVolume = volume.clamp(0, 100);
+      debugPrint('设置音频采集音量: $safeVolume');
+      
+      try {
+        // 设置主流和屏幕共享流的音量
+        // StreamIndex.STREAM_INDEX_MAIN = 0
+        js_util.callMethod(engine, 'setCaptureVolume', [0, safeVolume]);
+        
+        // StreamIndex.STREAM_INDEX_SCREEN = 1 (可选)
+        js_util.callMethod(engine, 'setCaptureVolume', [1, safeVolume]);
+        
+        debugPrint('音频采集音量设置成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('设置音频采集音量失败: $e');
+        return AudioResult.failure('设置音频采集音量失败: $e');
+      }
+    } catch (e) {
+      debugPrint('设置音频采集音量过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
     }
   }
 
@@ -123,15 +416,29 @@ class RtcDeviceManager {
         return null;
       }
 
-      final deviceId = await WebUtils.callMethodAsync(
-        engine,
-        'getCurrentAudioInputDeviceId',
-        [],
-      );
+      // 优先返回已记录的设备ID
+      if (_selectedAudioInputDeviceId != null) {
+        return _selectedAudioInputDeviceId;
+      }
 
-      return deviceId?.toString();
+      try {
+        final deviceId = await WebUtils.callMethodAsync(
+          engine,
+          'getCurrentAudioInputDeviceId',
+          [],
+        );
+        
+        if (deviceId != null) {
+          _selectedAudioInputDeviceId = deviceId.toString();
+        }
+        
+        return _selectedAudioInputDeviceId;
+      } catch (e) {
+        debugPrint('RtcDeviceManager: 获取当前音频输入设备ID失败: $e');
+        return null;
+      }
     } catch (e) {
-      debugPrint('RtcDeviceManager: 获取当前音频输入设备ID失败: $e');
+      debugPrint('RtcDeviceManager: 获取当前音频输入设备ID过程发生未知错误: $e');
       return null;
     }
   }
@@ -144,15 +451,29 @@ class RtcDeviceManager {
         return null;
       }
 
-      final deviceId = await WebUtils.callMethodAsync(
-        engine,
-        'getCurrentAudioOutputDeviceId',
-        [],
-      );
+      // 优先返回已记录的设备ID
+      if (_selectedAudioOutputDeviceId != null) {
+        return _selectedAudioOutputDeviceId;
+      }
 
-      return deviceId?.toString();
+      try {
+        final deviceId = await WebUtils.callMethodAsync(
+          engine,
+          'getCurrentAudioOutputDeviceId',
+          [],
+        );
+        
+        if (deviceId != null) {
+          _selectedAudioOutputDeviceId = deviceId.toString();
+        }
+        
+        return _selectedAudioOutputDeviceId;
+      } catch (e) {
+        debugPrint('RtcDeviceManager: 获取当前音频输出设备ID失败: $e');
+        return null;
+      }
     } catch (e) {
-      debugPrint('RtcDeviceManager: 获取当前音频输出设备ID失败: $e');
+      debugPrint('RtcDeviceManager: 获取当前音频输出设备ID过程发生未知错误: $e');
       return null;
     }
   }
@@ -178,6 +499,57 @@ class RtcDeviceManager {
     }
   }
 
+  /// 恢复音频播放
+  /// 用于处理自动播放策略限制
+  Future<bool> resumeAudioPlayback() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return false;
+      }
+
+      debugPrint('尝试恢复音频播放...');
+
+      try {
+        // 创建空白音频元素，播放静音音频来绕过浏览器自动播放限制
+        final document = js_util.getProperty(js_util.globalThis, 'document');
+        final audioElement = js_util.callMethod(document, 'createElement', ['audio']);
+
+        // 设置音频属性
+        js_util.setProperty(audioElement, 'volume', 0.1);
+
+        // 创建一个短暂的静音音轨
+        final AudioContext = js_util.getProperty(js_util.globalThis, 'AudioContext') ??
+            js_util.getProperty(js_util.globalThis, 'webkitAudioContext');
+
+        if (AudioContext != null) {
+          final audioContext = js_util.callConstructor(AudioContext, []);
+          final oscillator = js_util.callMethod(audioContext, 'createOscillator', []);
+
+          js_util.callMethod(oscillator, 'connect',
+              [js_util.getProperty(audioContext, 'destination')]);
+          js_util.callMethod(oscillator, 'start', [0]);
+          js_util.callMethod(oscillator, 'stop', [0.1]);
+        }
+
+        // 尝试播放一个静音音频
+        js_util.setProperty(audioElement, 'src',
+            'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+        await js_util.promiseToFuture(js_util.callMethod(audioElement, 'play', []));
+        
+        _isPlayingAudio = true;
+        debugPrint('音频播放已恢复');
+        return true;
+      } catch (e) {
+        debugPrint('恢复音频播放失败: $e');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('恢复音频播放过程发生未知错误: $e');
+      return false;
+    }
+  }
+
   // Getters
   bool get hasAudioInputPermission => _hasAudioInputPermission;
   bool get isCapturingAudio => _isCapturingAudio;
@@ -187,10 +559,24 @@ class RtcDeviceManager {
   String? get selectedAudioInputDeviceId => _selectedAudioInputDeviceId;
   String? get selectedAudioOutputDeviceId => _selectedAudioOutputDeviceId;
   
+  /// 音频状态流
+  Stream<bool> get audioStatusStream => _audioStatusController.stream;
+  
+  /// 设备变更流
+  Stream<List<Map<String, dynamic>>> get deviceChangeStream => _deviceChangeController.stream;
+  
   /// 设置音频采集状态标志
   /// @param isCapturing 是否正在采集音频
   void setCapturingAudioStatus(bool isCapturing) {
     _isCapturingAudio = isCapturing;
+    _audioStatusController.add(isCapturing);
     debugPrint('RtcDeviceManager: 音频采集状态已更新为 ${isCapturing ? "采集中" : "未采集"}');
+  }
+  
+  /// 释放资源
+  void dispose() {
+    _audioStatusController.close();
+    _deviceChangeController.close();
+    debugPrint('RtcDeviceManager: 资源已释放');
   }
 }

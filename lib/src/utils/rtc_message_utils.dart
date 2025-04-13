@@ -65,15 +65,16 @@ class RtcMessageUtils {
       // 记录前几个字节用于调试
       final magicBytes = [bytes[0], bytes[1], bytes[2], bytes[3]];
       final magicString = String.fromCharCodes(magicBytes);
-      debugPrint('RtcMessageUtils: 消息头部标识: $magicString');
       
       // 检查魔术数字
       final int magic = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
       bool validMagic = false;
+      bool isSubtitle = false;
       
       if (magic == MAGIC_NUMBER_SUBV) {
         validMagic = true;
-        debugPrint('RtcMessageUtils: 检测到字幕消息 (subv)');
+        isSubtitle = true;
+        // 只有在非字幕消息时才输出类型日志
       } else if (magic == MAGIC_NUMBER_CONV) {
         validMagic = true;
         debugPrint('RtcMessageUtils: 检测到对话状态消息 (conv)');
@@ -89,7 +90,12 @@ class RtcMessageUtils {
       
       // 获取内容长度
       final int length = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-      debugPrint('RtcMessageUtils: 内容长度: $length');
+      
+      // 只在非字幕消息时输出长度日志
+      if (!isSubtitle) {
+        debugPrint('RtcMessageUtils: 消息头部标识: $magicString');
+        debugPrint('RtcMessageUtils: 内容长度: $length');
+      }
       
       if (length <= 0 || length > 100000) {  // 设置一个合理的最大值
         debugPrint('RtcMessageUtils: 非法内容长度: $length');
@@ -97,10 +103,14 @@ class RtcMessageUtils {
       }
       
       if (bytes.length - 8 < length) {
-        debugPrint('RtcMessageUtils: TLV长度不匹配，标记长度:$length，实际可用:${bytes.length - 8}');
+        // 只在严重不匹配或非字幕消息时输出警告
+        if (!isSubtitle || (bytes.length - 8 < length * 0.5)) {
+          debugPrint('RtcMessageUtils: TLV长度不匹配，标记长度:$length，实际可用:${bytes.length - 8}');
+        }
+        
         // 如果只是轻微不匹配，尝试使用可用的数据
         if (bytes.length - 8 > 5 && bytes.length - 8 >= length * 0.8) {
-          debugPrint('RtcMessageUtils: 尝试使用截断的消息内容');
+          // 减少日志输出
         } else {
           return null;
         }
@@ -112,10 +122,35 @@ class RtcMessageUtils {
       // 提取内容
       try {
         final String content = utf8.decode(bytes.sublist(8, 8 + actualLength), allowMalformed: true);
-        debugPrint('RtcMessageUtils: 成功解码TLV内容: ${content.length} 字符');
+        
+        // 只在非字幕消息时输出内容解码日志
+        if (!isSubtitle) {
+          debugPrint('RtcMessageUtils: 成功解码TLV内容: ${content.length} 字符');
+        }
         
         // 尝试解析JSON内容
-        return safeParseJson(content);
+        final result = safeParseJson(content);
+        
+        // 检查是否为最终字幕
+        if (isSubtitle && result != null) {
+          bool isDefiniteSubtitle = false;
+          if (result.containsKey('data')) {
+            var subtitleData = result['data'];
+            if (subtitleData is List && subtitleData.isNotEmpty) {
+              var firstItem = subtitleData.first;
+              if (firstItem is Map && firstItem.containsKey('definite')) {
+                isDefiniteSubtitle = firstItem['definite'] == true && firstItem['paragraph'] == true;
+              }
+            }
+          }
+          
+          // 只有最终字幕才输出日志
+          if (isDefiniteSubtitle) {
+            debugPrint('RtcMessageUtils: 检测到最终字幕消息 (subv)');
+          }
+        }
+        
+        return result;
       } catch (decodeError) {
         debugPrint('RtcMessageUtils: UTF-8解码失败: $decodeError，尝试latin1');
         // 尝试使用latin1编码

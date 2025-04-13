@@ -2,16 +2,11 @@ import 'dart:async';
 import 'dart:core';
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
-import 'dart:js_interop';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:rtc_aigc_plugin/src/models/models.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
-import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart';
 
 /// RTC错误类，用于表示RTC操作中发生的错误
 class RtcError {
@@ -208,9 +203,6 @@ class RtcEventManager {
   /// 已加入的用户列表
   List<String> get joinedUsers => List.unmodifiable(_joinedUsers);
 
-  /// 消息流控制器
-  final StreamController<RtcAigcMessage> _messageController =
-      StreamController<RtcAigcMessage>.broadcast();
 
   /// 用于记录和处理RTC错误
   void _handleError(RtcError error) {
@@ -273,16 +265,12 @@ class RtcEventManager {
     debugPrint('RtcEventManager: 引擎设置成功');
 
     // 设置消息处理器的引擎
-    if (_messageHandler != null) {
-      try {
-        _messageHandler.setEngine(rtcClient);
-        debugPrint('RtcEventManager: 成功设置消息处理器的引擎');
-      } catch (e) {
-        debugPrint('RtcEventManager: 设置消息处理器的引擎失败: $e');
-        // 继续执行，因为可能消息处理器已在其他地方初始化
-      }
-    } else {
-      debugPrint('RtcEventManager: 警告 - _messageHandler 未初始化');
+    try {
+      _messageHandler.setEngine(rtcClient);
+      debugPrint('RtcEventManager: 成功设置消息处理器的引擎');
+    } catch (e) {
+      debugPrint('RtcEventManager: 设置消息处理器的引擎失败: $e');
+      // 继续执行，因为可能消息处理器已在其他地方初始化
     }
 
     // 获取事件常量
@@ -320,30 +308,6 @@ class RtcEventManager {
     };
   }
 
-  /// 设置消息处理器监听
-  void _setupMessageHandlerListeners() {
-    _messageHandler.subtitleStream.listen((data) {
-      if (data.containsKey('text')) {
-        _subtitleController.add(data);
-      }
-    });
-
-    _messageHandler.stateStream.listen((data) {
-      if (data != null && data.containsKey('type')) {
-        debugPrint('RtcEventManager: 从消息处理器接收状态更新: ${data['type']}');
-        _stateController.add(data);
-      }
-    });
-
-    _messageHandler.functionCallStream.listen((data) {
-      debugPrint('RtcEventManager: 从消息处理器接收函数调用: ${data['name']}');
-      _stateController.add({
-        'type': 'function_call',
-        'data': data,
-        'timestamp': DateTime.now().millisecondsSinceEpoch
-      });
-    });
-  }
 
   /// 获取VERTC事件常量 - 优化版
   void _getEvents() {

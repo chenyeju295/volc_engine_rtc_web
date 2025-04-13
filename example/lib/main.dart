@@ -105,7 +105,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     setState(() {
       _status = '正在初始化...';
     });
-
     try {
       // 创建 AIGC 配置
       final aigcConfig = AigcConfig(
@@ -127,16 +126,30 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
           lLMConfig: LlmConfig(
               mode: 'ArkV3',
               endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
-            
               systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
-              modelName: 'ArkV3',
-              welcomeSpeech: "你好，我是你的AI小助手，有什么可以帮你的吗？"),
+              modelName: 'Doubao-pro-32k',
+              modelVersion: '1.0',
+              prefill: true,
+              maxTokens: 1024,
+              temperature: 0.1,
+              topP: 0.3,
+              welcomeSpeech: "你好，我是你的AI小助手，有什么可以帮你的吗？",
+              modeSourceType: 'Available',
+              feature: r'{\"Http\":true}',
+              ),
+             
+            
           tTSConfig: TtsConfig(
             provider: 'volcano',
             providerParams: ProviderParams(
               appId: '4799544484', // 替换为您的 TTS AppID
               cluster: 'volcano_tts',
             ),
+            audio: Audio(
+              voiceType: 'BV001_streaming',
+              speedRatio: 1
+            ),
+            ignoreBracketText: [1,2,3,4,5],
           ),
           aSRConfig: AsrConfig(
             provider: 'volcano',
@@ -145,10 +158,20 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
               appId: '4799544484', // 替换为您的 ASR AppID
               cluster: 'volcengine_streaming_common',
             ),
+
+           vADConfig: VadConfig(
+              silenceTime: 600,         // 静音时间
+              silenceThreshold: 200,    // 静音阈值
+           ),
+            volumeGain: 0.3,
+
           ),
+          interruptMode: 0,
+          subtitleConfig: SubtitleConfig(subtitleMode: 0),
         ),
       );
-
+await Future.delayed(const Duration(seconds: 1));
+   
       // 使用 AigcConfig 初始化插件
       final success = await RtcAigcPlugin.initialize(
         config: aigcConfig,
@@ -177,8 +200,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   void _setupSubscriptions() {
     // 订阅字幕流
     _subtitleSubscription = RtcAigcPlugin.subtitleStream.listen((subtitle) {
-      if (subtitle == null) return;
-      final Map<String, dynamic> subtitleMap = subtitle as Map<String, dynamic>;
+      final Map<String, dynamic> subtitleMap = subtitle;
       setState(() {
         _currentSubtitle = subtitleMap['text'] ?? '';
         _isSubtitleFinal = subtitleMap['isFinal'] ?? false;
@@ -195,7 +217,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
     // 订阅消息流
     _messageSubscription = RtcAigcPlugin.messageHistoryStream.listen((message) {
-      final List<RtcAigcMessage> messageMap = message as List<RtcAigcMessage>;
+      final List<RtcAigcMessage> messageMap = message;
       setState(() {
         _messages.addAll(messageMap);
       });
@@ -576,6 +598,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
           ),
         ],
+
       ),
     );
   }

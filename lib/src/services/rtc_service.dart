@@ -14,7 +14,6 @@ import 'package:rtc_aigc_plugin/src/services/rtc_device_manager.dart';
 import 'package:rtc_aigc_plugin/src/client/aigc_client.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
-import 'package:rtc_aigc_plugin/src/utils/rtc_message_utils.dart' as utils;
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
 /// RTC消息回调
@@ -299,91 +298,67 @@ class RtcService {
 
   /// 设置消息处理器回调
   void _setupMessageHandlerCallbacks() {
-    if (_messageHandler == null) {
-      debugPrint('【RTC服务】警告: 消息处理器为null，无法设置回调');
-      return;
-    }
-
     debugPrint('【RTC服务】设置消息处理器回调...');
 
     // 设置字幕回调
     _messageHandler.onSubtitle = (subtitle) {
-      if (subtitle != null && _subtitleController != null) {
-        _subtitleController.add(subtitle);
-      }
-    };
+      _subtitleController.add(subtitle);
+        };
 
     // 设置函数调用回调
     _messageHandler.onFunctionCall = (functionCall) {
-      if (functionCall != null) {
-        if (_functionCallController != null) {
-          _functionCallController.add(functionCall);
-        }
+      _functionCallController.add(functionCall);
 
-        // 创建函数调用消息对象并添加到历史
-        final functionCallMessage = RtcAigcMessage.functionCall(
-          id: functionCall['id'] ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
-          name: functionCall['name'] ?? '',
-          arguments: functionCall['arguments'] ?? {},
-          isUser: false,
-          timestamp: DateTime.now().millisecondsSinceEpoch,
-        );
-        _addMessage(functionCallMessage);
+      // 创建函数调用消息对象并添加到历史
+      final functionCallMessage = RtcAigcMessage.functionCall(
+        id: functionCall['id'] ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        name: functionCall['name'] ?? '',
+        arguments: functionCall['arguments'] ?? {},
+        isUser: false,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      _addMessage(functionCallMessage);
 
-        if (_functionCallCallback != null) {
-          _functionCallCallback!(functionCall);
-        }
+      if (_functionCallCallback != null) {
+        _functionCallCallback!(functionCall);
       }
-    };
+        };
 
     // 设置状态回调
     _messageHandler.onState = (state) {
-      if (state != null) {
-        if (_stateMessageController != null) {
-          _stateMessageController.add(state);
-        }
+      _stateMessageController.add(state);
 
-        final stateType = state['state'] as String? ?? '';
+      final stateType = state['state'] as String? ?? '';
 
-        // 更新状态
-        switch (stateType) {
-          case 'THINKING':
-            _setState(RtcState.waitingResponse);
-            break;
-          case 'SPEAKING':
-            _setState(RtcState.inConversation);
-            break;
-          case 'FINISHED':
-            _setState(RtcState.initialized);
-            break;
-          case 'INTERRUPTED':
-            _setState(RtcState.inRoom);
-            break;
-        }
+      // 更新状态
+      switch (stateType) {
+        case 'THINKING':
+          _setState(RtcState.waitingResponse);
+          break;
+        case 'SPEAKING':
+          _setState(RtcState.inConversation);
+          break;
+        case 'FINISHED':
+          _setState(RtcState.initialized);
+          break;
+        case 'INTERRUPTED':
+          _setState(RtcState.inRoom);
+          break;
       }
-    };
+        };
 
     debugPrint('【RTC服务】消息处理器回调设置完成');
   }
 
   /// 设置事件流转发
   void _setupEventStreams() {
-    if (_eventManager == null) {
-      debugPrint('【RTC服务】警告: 事件管理器为null，无法设置事件流');
-      return;
-    }
-
     try {
       // 转发用户加入/离开事件
       _eventManager.userJoinStream.listen((userId) {
-        if (userId == null) return;
-
         final data = {'userId': userId};
 
-        if (_userJoinedController != null) {
-          _userJoinedController.add(data);
-        }
+        _userJoinedController.add(data);
 
         if (onUserJoined != null) {
           onUserJoined!(data);
@@ -391,13 +366,9 @@ class RtcService {
       }, onError: (e) => debugPrint('【RTC服务】用户加入流错误: $e'));
 
       _eventManager.userLeaveStream.listen((userId) {
-        if (userId == null) return;
-
         final data = {'userId': userId};
 
-        if (_userLeaveController != null) {
-          _userLeaveController.add(data);
-        }
+        _userLeaveController.add(data);
 
         if (onUserLeave != null) {
           onUserLeave!(data);
@@ -406,8 +377,6 @@ class RtcService {
 
       // 转发连接状态事件
       _eventManager.connectionStateStream.listen((state) {
-        if (state == null) return;
-
         RtcConnectionState connectionState;
         switch (state.toLowerCase()) {
           case 'connected':
@@ -426,18 +395,12 @@ class RtcService {
             connectionState = RtcConnectionState.unknown;
         }
 
-        if (_connectionStateController != null) {
-          _connectionStateController.add(connectionState);
-        }
-      }, onError: (e) => debugPrint('【RTC服务】连接状态流错误: $e'));
+        _connectionStateController.add(connectionState);
+            }, onError: (e) => debugPrint('【RTC服务】连接状态流错误: $e'));
 
       // 转发网络质量事件
       _eventManager.networkQualityStream.listen((quality) {
-        if (quality == null) return;
-
-        if (_networkQualityController != null) {
-          _networkQualityController.add(quality);
-        }
+        _networkQualityController.add(quality);
 
         if (_networkQualityCallback != null) {
           _networkQualityCallback!(quality);
@@ -446,11 +409,7 @@ class RtcService {
 
       // 转发自动播放失败事件
       _eventManager.autoPlayFailedStream.listen((data) {
-        if (data == null) return;
-
-        if (_autoPlayFailedController != null) {
-          _autoPlayFailedController.add(data);
-        }
+        _autoPlayFailedController.add(data);
 
         if (_autoPlayFailedCallback != null) {
           _autoPlayFailedCallback!(data);
@@ -459,11 +418,7 @@ class RtcService {
 
       // 转发音频属性事件
       _eventManager.localAudioPropertiesStream.listen((data) {
-        if (data == null) return;
-
-        if (_localAudioPropertiesController != null) {
-          _localAudioPropertiesController.add(data);
-        }
+        _localAudioPropertiesController.add(data);
 
         if (_audioPropertiesCallback != null) {
           _audioPropertiesCallback!(data);
@@ -471,20 +426,12 @@ class RtcService {
       }, onError: (e) => debugPrint('【RTC服务】本地音频属性流错误: $e'));
 
       _eventManager.remoteAudioPropertiesStream.listen((data) {
-        if (data == null) return;
-
-        if (_remoteAudioPropertiesController != null) {
-          _remoteAudioPropertiesController.add(data);
-        }
-      }, onError: (e) => debugPrint('【RTC服务】远程音频属性流错误: $e'));
+        _remoteAudioPropertiesController.add(data);
+            }, onError: (e) => debugPrint('【RTC服务】远程音频属性流错误: $e'));
 
       // 转发用户流事件
       _eventManager.userPublishStreamStream.listen((data) {
-        if (data == null) return;
-
-        if (_userPublishStreamController != null) {
-          _userPublishStreamController.add(data);
-        }
+        _userPublishStreamController.add(data);
 
         if (_userPublishStreamCallback != null) {
           _userPublishStreamCallback!(data);
@@ -496,11 +443,7 @@ class RtcService {
       }, onError: (e) => debugPrint('【RTC服务】用户发布流事件错误: $e'));
 
       _eventManager.userUnpublishStreamStream.listen((data) {
-        if (data == null) return;
-
-        if (_userUnpublishStreamController != null) {
-          _userUnpublishStreamController.add(data);
-        }
+        _userUnpublishStreamController.add(data);
 
         if (onUserUnpublishStream != null) {
           onUserUnpublishStream!(data);
@@ -509,9 +452,7 @@ class RtcService {
 
       // 转发音频捕获事件
       _eventManager.audioCaptureStream.listen((isCapturing) {
-        if (_audioStatusController != null) {
-          _audioStatusController.add(isCapturing);
-        }
+        _audioStatusController.add(isCapturing);
 
         if (_audioStatusCallback != null) {
           _audioStatusCallback!(isCapturing);
@@ -520,15 +461,9 @@ class RtcService {
 
       // 转发音频设备事件
       _eventManager.audioDevicesStream.listen((devices) {
-        if (devices == null) return;
+        _audioDevicesController.add(devices);
 
-        if (_audioDevicesController != null) {
-          _audioDevicesController.add(devices);
-        }
-
-        if (_deviceStateController != null) {
-          _deviceStateController.add(true);
-        }
+        _deviceStateController.add(true);
 
         if (_deviceStateCallback != null) {
           _deviceStateCallback!(true);
@@ -537,8 +472,6 @@ class RtcService {
 
       // 转发错误事件
       _eventManager.errorStream.listen((error) {
-        if (error == null) return;
-
         if (_messageCallback != null) {
           final message = RtcAigcMessage.error(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -573,8 +506,6 @@ class RtcService {
       // AIGC客户端消息监听
       if (_aigcClient != null) {
         _aigcClient!.messageStream.listen((message) {
-          if (message == null) return;
-
           debugPrint('【RTC服务】收到AIGC消息: ${message.text}');
           _addMessage(message);
 
@@ -584,8 +515,6 @@ class RtcService {
         }, onError: (e) => debugPrint('【RTC服务】AIGC消息流错误: $e'));
 
         _aigcClient!.stateStream.listen((state) {
-          if (state == null) return;
-
           debugPrint('【RTC服务】AIGC状态变更: $state');
 
           if (state == AigcClientState.responding) {
@@ -616,16 +545,11 @@ class RtcService {
   /// 更新状态
   void _setState(RtcState newState) {
     try {
-      if (newState == null) {
-        debugPrint('【RTC服务】警告: 尝试设置null状态');
-        return;
-      }
-
       if (_state != newState) {
         _state = newState;
 
         // 通知状态流监听器
-        if (_stateController != null && !_stateController.isClosed) {
+        if (!_stateController.isClosed) {
           _stateController.add(_state);
         }
 
@@ -650,14 +574,8 @@ class RtcService {
   /// 添加消息到历史记录
   void _addMessage(RtcAigcMessage message) {
     try {
-      if (message == null) {
-        debugPrint('【RTC服务】警告: 尝试添加null消息到历史记录');
-        return;
-      }
-
-      // 确保消息有ID
       String messageId = message.id;
-      if (messageId == null || messageId.isEmpty) {
+      if (messageId.isEmpty) {
         messageId = DateTime.now().millisecondsSinceEpoch.toString();
         // 创建一个新的消息对象，确保ID不为空
         message = RtcAigcMessage(
@@ -675,8 +593,7 @@ class RtcService {
       _messageHistory.add(message);
 
       // 通知监听器
-      if (_messageHistoryController != null &&
-          !_messageHistoryController.isClosed) {
+      if (!_messageHistoryController.isClosed) {
         _messageHistoryController.add(List.unmodifiable(_messageHistory));
       }
 
@@ -760,16 +677,12 @@ class RtcService {
   Future<bool> initialize() async {
     try {
       if (_isInitialized) {
-        debugPrint('【RTC服务】已初始化，跳过');
         return true;
       }
 
       debugPrint('【RTC服务】开始初始化...');
 
-      // 0. 首先确保SDK已完全加载
-      debugPrint('【RTC服务】确认SDK加载状态...');
       if (!WebUtils.isSdkLoaded()) {
-        debugPrint('【RTC服务】SDK未加载，正在等待加载完成...');
         try {
           await WebUtils.waitForSdkLoaded();
           debugPrint('【RTC服务】SDK加载完成，继续初始化流程');
@@ -781,8 +694,6 @@ class RtcService {
         debugPrint('【RTC服务】SDK已加载，继续初始化流程');
       }
 
-      // 1. 初始化引擎管理器，这是一切的基础
-      debugPrint('【RTC服务】初始化引擎管理器...');
       final engineSuccess = await _engineManager.initialize();
       if (!engineSuccess) {
         debugPrint('【RTC服务】引擎初始化失败');
@@ -803,11 +714,9 @@ class RtcService {
         // 确保组件初始化的正确顺序：先消息处理器，再事件管理器
         debugPrint('【RTC服务】设置消息处理器引擎...');
         _messageHandler.setEngine(rtcClient);
-
         debugPrint('【RTC服务】设置事件管理器引擎...');
-        // 先注册事件处理器，再设置引擎
-        _engineManager.registerEventHandler(_eventManager);
         _eventManager.setEngine(rtcClient);
+
       } catch (e, stackTrace) {
         debugPrint('【RTC服务】设置内部组件引擎失败: $e');
         debugPrint('【RTC服务】错误堆栈: $stackTrace');
@@ -1029,7 +938,7 @@ class RtcService {
 
       // 添加到历史记录
       _addMessage(userMessage);
-
+     await _messageHandler.sendUserBinaryMessage( _config.agentConfig!.userId.toString(), message);
       // 发送到AI服务
       if (_aigcClient != null) {
         _aigcClient!.sendMessage(message);
@@ -1080,194 +989,43 @@ class RtcService {
     }
   }
 
-  /// 恢复音频播放
-  Future<bool> resumeAudioPlayback() async {
-    try {
-      if (!_checkInitialized()) return false;
-
-      debugPrint('【RTC服务】恢复音频播放...');
-
-      // 通过引擎管理器恢复音频播放
-      final resumeSuccess = await _engineManager.resumeAudioPlayback();
-
-      return resumeSuccess;
-    } catch (e) {
-      debugPrint('【RTC服务】恢复音频播放时发生错误: $e');
-      return false;
-    }
-  }
-
-  /// 获取音频输入设备列表
-  Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
-    try {
-      if (!_checkInitialized()) return [];
-
-      final devices = await _deviceManager.getAudioInputDevices();
-      return devices;
-    } catch (e) {
-      debugPrint('【RTC服务】获取音频输入设备列表时发生错误: $e');
-      return [];
-    }
-  }
-
-  /// 设置并安全获取 MediaType 常量
-  dynamic _getMediaTypeAudio() {
-    try {
-      // 方法1: 尝试通过 js_util.globalThis 获取
-      final mediaTypeObj = js_util.getProperty(js_util.globalThis, 'VERTC');
-      if (mediaTypeObj != null) {
-        dynamic mediaType = js_util.getProperty(mediaTypeObj, 'MediaType');
-        if (mediaType != null) {
-          var audioType = js_util.getProperty(mediaType, 'AUDIO');
-          if (audioType != null) {
-            return audioType;
-          }
-        }
-      }
-      
-      // 方法2: 尝试通过 js.context 获取
-      if (js.context.hasProperty('VERTC')) {
-        final vertc = js.context['VERTC'];
-        if (vertc.hasProperty('MediaType') && vertc['MediaType'].hasProperty('AUDIO')) {
-          return vertc['MediaType']['AUDIO'];
-        }
-      }
-      
-      // 返回默认值 1 (MediaType.AUDIO = 1)
-      return 1;
-    } catch (e) {
-      debugPrint('【RTC服务】获取MediaType.AUDIO常量失败: $e');
-      return 1; // 默认值
-    }
-  }
-  
-  // 设置并安全获取 StreamIndex 常量
-  dynamic _getStreamIndexMain() {
-    try {
-      // 方法1: 尝试通过 js_util.globalThis 获取
-      final streamIndexObj = js_util.getProperty(js_util.globalThis, 'VERTC');
-      if (streamIndexObj != null) {
-        dynamic streamIndex = js_util.getProperty(streamIndexObj, 'StreamIndex');
-        if (streamIndex != null) {
-          var mainType = js_util.getProperty(streamIndex, 'MAIN');
-          if (mainType != null) {
-            return mainType;
-          }
-        }
-      }
-      
-      // 方法2: 尝试通过 js.context 获取
-      if (js.context.hasProperty('VERTC')) {
-        final vertc = js.context['VERTC'];
-        if (vertc.hasProperty('StreamIndex') && vertc['StreamIndex'].hasProperty('STREAM_INDEX_MAIN')) {
-          return vertc['StreamIndex']['STREAM_INDEX_MAIN'];
-        }
-      }
-      
-      // 返回默认值 0 (StreamIndex.STREAM_INDEX_MAIN = 0)
-      return 0;
-    } catch (e) {
-      debugPrint('【RTC服务】获取StreamIndex.MAIN常量失败: $e');
-      return 0; // 默认值
-    }
-  }
-
   /// 开始音频采集
-  /// 开启内部音频采集。默认为关闭状态。
-  /// 内部采集是指：使用 RTC SDK 内置采集机制进行音频采集。
-  /// 可见用户进房后调用该方法，房间中的其他用户会收到 onUserStartAudioCapture 的回调。
-  /// 
-  /// 注意：
-  /// - 调用 stopAudioCapture 可以停止内部音频采集。否则，只有当销毁引擎实例时，内部音频采集才会停止。
-  /// - 创建引擎后，无论是否发布音频数据，你都可以调用该方法开启音频采集，只有当（内部或外部）音频采集开始以后音频流才会发布。
-  /// 
-  /// @param deviceId 设备 ID，传入采集音频的设备 ID，以免出现无声等异常。可通过 getAudioInputDevices 获取设备列表。
-  /// @return 如果成功，返回包含实际生效的音频采集参数；如果失败，返回错误信息。
-  Future<Map<String, dynamic>> startAudioCapture([String? deviceId]) async {
+  /// @param deviceId 可选的音频设备ID
+  /// @return 如果成功，返回true；如果失败，返回包含错误信息的Map
+  Future<dynamic> startAudioCapture(String? deviceId) async {
     try {
       if (!_checkInitialized()) {
         return {'success': false, 'error': 'RTC服务未初始化'};
       }
 
-      debugPrint('【RTC服务】开始音频采集${deviceId != null ? "，设备ID: $deviceId" : ""}');
+      debugPrint('【RTC服务】开始音频采集，设备ID: ${deviceId ?? "默认设备"}');
 
-      // 获取RTC客户端实例
-      final rtcClient = _engineManager.getRtcClient();
-      if (rtcClient == null) {
-        debugPrint('【RTC服务】无法获取RTC客户端实例');
-        return {'success': false, 'error': '无法获取RTC客户端实例'};
-      }
+      // 委托给设备管理器处理
+      final result = await _deviceManager.startAudioCapture(deviceId: deviceId);
+      
+      // 如果成功启动采集，并且在房间中，尝试发布流
+      if (result.success && _isInRoom) {
+        debugPrint('【RTC服务】尝试发布流');
 
-      // 调用原生的startAudioCapture方法
-      try {
-        // 准备参数
-        final args = deviceId != null ? [deviceId] : [];
-        
-        // 直接调用引擎的startAudioCapture方法
-        final resultPromise = js_util.callMethod(rtcClient, 'startAudioCapture', args);
-        
-        // 等待Promise完成
-        final result = await js_util.promiseToFuture(resultPromise);
-        
-        // 更新设备管理器的状态
-        _deviceManager.setCapturingAudioStatus(true);
-        
-        // 发布音频流
         try {
-          // 获取MediaType.AUDIO常量
-          dynamic mediaType = _getMediaTypeAudio();
-          
-          // 发布音频流
-          final publishPromise = js_util.callMethod(rtcClient, 'publishStream', [mediaType]);
-          await js_util.promiseToFuture(publishPromise);
-          debugPrint('【RTC服务】音频流发布成功，使用MediaType.AUDIO: $mediaType');
+          // 获取RTC客户端实例
+          final rtcClient = _engineManager.getRtcClient();
+          if (rtcClient != null) {
+            // 获取MediaType.AUDIO常量
+            dynamic mediaType = _getMediaTypeAudio();
+            
+            // 发布音频流
+            final publishPromise = js_util.callMethod(rtcClient, 'publishStream', [mediaType]);
+            await js_util.promiseToFuture(publishPromise);
+            debugPrint('【RTC服务】音频流发布成功');
+          }
         } catch (e) {
           debugPrint('【RTC服务】发布音频流失败，但采集已启动: $e');
           // 不影响整体返回结果，因为采集已启动
         }
-        
-        // 转换结果
-        final Map<String, dynamic> trackSettings = {};
-        if (result != null) {
-          try {
-            // 尝试将JS对象转换为Dart Map
-            final settings = js_util.dartify(result);
-            if (settings is Map) {
-              trackSettings.addAll(Map<String, dynamic>.from(settings));
-            }
-          } catch (e) {
-            debugPrint('【RTC服务】转换音频采集参数失败: $e');
-          }
-        }
-        
-        debugPrint('【RTC服务】音频采集启动成功: $trackSettings');
-        return {
-          'success': true, 
-          'trackSettings': trackSettings,
-        };
-      } catch (e) {
-        // 检查常见错误码
-        String errorMsg = e.toString();
-        String errorCode = 'UNKNOWN_ERROR';
-        
-        if (errorMsg.contains('REPEAT_CAPTURE')) {
-          errorCode = 'REPEAT_CAPTURE';
-          errorMsg = '重复采集';
-        } else if (errorMsg.contains('GET_AUDIO_TRACK_FAILED')) {
-          errorCode = 'GET_AUDIO_TRACK_FAILED';
-          errorMsg = '采集音频失败，请确认是否有可用的采集设备，或是否被其他应用占用';
-        } else if (errorMsg.contains('STREAM_TYPE_NOT_MATCH')) {
-          errorCode = 'STREAM_TYPE_NOT_MATCH';
-          errorMsg = '流类型不匹配。调用setAudioSourceType设置了自定义媒体源后，又调用内部采集相关的接口';
-        }
-        
-        debugPrint('【RTC服务】音频采集启动失败: [$errorCode] $errorMsg');
-        return {
-          'success': false, 
-          'error': errorMsg,
-          'errorCode': errorCode
-        };
       }
+      
+      return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】音频采集启动过程发生未知错误: $e');
       return {'success': false, 'error': e.toString()};
@@ -1291,57 +1049,29 @@ class RtcService {
 
       debugPrint('【RTC服务】停止音频采集...');
 
-      // 获取RTC客户端实例
-      final rtcClient = _engineManager.getRtcClient();
-      if (rtcClient == null) {
-        debugPrint('【RTC服务】无法获取RTC客户端实例');
-        return {'success': false, 'error': '无法获取RTC客户端实例'};
-      }
-
-      // 先尝试取消发布流
-      try {
-        // 获取MediaType.AUDIO常量
-        dynamic mediaType = _getMediaTypeAudio();
-        
-        // 取消发布音频流
-        final unpublishPromise = js_util.callMethod(rtcClient, 'unpublishStream', [mediaType]);
-        await js_util.promiseToFuture(unpublishPromise);
-        debugPrint('【RTC服务】取消发布音频流成功，使用MediaType.AUDIO: $mediaType');
-      } catch (e) {
-        debugPrint('【RTC服务】取消发布音频流失败: $e');
-        // 继续执行，不影响停止采集
-      }
-
-      // 调用原生的stopAudioCapture方法
-      try {
-        // 直接调用引擎的stopAudioCapture方法
-        final resultPromise = js_util.callMethod(rtcClient, 'stopAudioCapture', []);
-        
-        // 等待Promise完成
-        await js_util.promiseToFuture(resultPromise);
-        
-        // 更新设备管理器的状态
-        _deviceManager.setCapturingAudioStatus(false);
-        
-        debugPrint('【RTC服务】音频采集停止成功');
-        return true;
-      } catch (e) {
-        // 检查常见错误码
-        String errorMsg = e.toString();
-        String errorCode = 'UNKNOWN_ERROR';
-        
-        if (errorMsg.contains('STREAM_TYPE_NOT_MATCH')) {
-          errorCode = 'STREAM_TYPE_NOT_MATCH';
-          errorMsg = '流类型不匹配。调用setAudioSourceType设置了自定义媒体源后，又调用内部采集相关的接口';
+      // 如果在房间中，先尝试取消发布流
+      if (_isInRoom) {
+        try {
+          // 获取RTC客户端实例
+          final rtcClient = _engineManager.getRtcClient();
+          if (rtcClient != null) {
+            // 获取MediaType.AUDIO常量
+            dynamic mediaType = _getMediaTypeAudio();
+            
+            // 取消发布音频流
+            final unpublishPromise = js_util.callMethod(rtcClient, 'unpublishStream', [mediaType]);
+            await js_util.promiseToFuture(unpublishPromise);
+            debugPrint('【RTC服务】取消发布音频流成功');
+          }
+        } catch (e) {
+          debugPrint('【RTC服务】取消发布音频流失败: $e');
+          // 继续执行，不影响停止采集
         }
-        
-        debugPrint('【RTC服务】音频采集停止失败: [$errorCode] $errorMsg');
-        return {
-          'success': false, 
-          'error': errorMsg,
-          'errorCode': errorCode
-        };
       }
+
+      // 委托给设备管理器处理
+      final result = await _deviceManager.stopAudioCapture();
+      return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】停止音频采集过程发生未知错误: $e');
       return {'success': false, 'error': e.toString()};
@@ -1349,62 +1079,97 @@ class RtcService {
   }
 
   /// 设置音频采集音量
-  Future<bool> setAudioCaptureVolume(int volume) async {
+  Future<dynamic> setAudioCaptureVolume(int volume) async {
     try {
-      if (!_checkInitialized()) return false;
-
-      debugPrint('【RTC服务】设置音频采集音量: $volume');
-
-      // 参考web demo的 setAudioVolume 方法
-      try {
-        final rtcClient = _engineManager.getRtcClient();
-        if (rtcClient != null) {
-          // 设置主流和屏幕共享流的音量
-          // StreamIndex.STREAM_INDEX_MAIN = 0
-          js_util.callMethod(rtcClient, 'setCaptureVolume', [0, volume]);
-
-          // StreamIndex.STREAM_INDEX_SCREEN = 1 (可选)
-          js_util.callMethod(rtcClient, 'setCaptureVolume', [1, volume]);
-
-          debugPrint('【RTC服务】音频采集音量设置成功');
-          return true;
-        }
-      } catch (e) {
-        debugPrint('【RTC服务】设置音频采集音量失败: $e');
+      if (!_checkInitialized()) {
+        return {'success': false, 'error': 'RTC服务未初始化'};
       }
 
-      return false;
+      debugPrint('【RTC服务】设置音频采集音量: $volume');
+      
+      // 委托给设备管理器处理
+      final result = await _deviceManager.setAudioCaptureVolume(volume);
+      return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】设置音频采集音量时发生错误: $e');
-      return false;
+      return {'success': false, 'error': e.toString()};
     }
   }
 
   /// 切换音频设备
-  Future<bool> switchAudioDevice(String deviceId) async {
+  Future<dynamic> switchAudioDevice(String deviceId) async {
+    try {
+      if (!_checkInitialized()) {
+        return {'success': false, 'error': 'RTC服务未初始化'};
+      }
+
+      debugPrint('【RTC服务】切换音频设备: $deviceId');
+      
+      // 委托给设备管理器处理
+      final result = await _deviceManager.switchAudioDevice(deviceId);
+      return result.toMap();
+    } catch (e) {
+      debugPrint('【RTC服务】切换音频设备时发生错误: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// 恢复音频播放
+  Future<bool> resumeAudioPlayback() async {
     try {
       if (!_checkInitialized()) return false;
 
-      debugPrint('【RTC服务】切换音频设备: $deviceId');
+      debugPrint('【RTC服务】恢复音频播放...');
 
-      // 参考web demo的 switchDevice 方法
-      try {
-        final rtcClient = _engineManager.getRtcClient();
-        if (rtcClient != null) {
-          // 设置音频采集设备
-          js_util.callMethod(rtcClient, 'setAudioCaptureDevice', [deviceId]);
-
-          debugPrint('【RTC服务】音频设备切换成功');
-          return true;
-        }
-      } catch (e) {
-        debugPrint('【RTC服务】切换音频设备失败: $e');
-      }
-
-      return false;
+      // 委托给设备管理器处理
+      return await _deviceManager.resumeAudioPlayback();
     } catch (e) {
-      debugPrint('【RTC服务】切换音频设备时发生错误: $e');
+      debugPrint('【RTC服务】恢复音频播放时发生错误: $e');
       return false;
+    }
+  }
+
+  /// 获取音频输入设备列表
+  Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
+    try {
+      if (!_checkInitialized()) return [];
+      
+      // 委托给设备管理器处理
+      return await _deviceManager.getAudioInputDevices();
+    } catch (e) {
+      debugPrint('【RTC服务】获取音频输入设备列表时发生错误: $e');
+      return [];
+    }
+  }
+
+  /// 刷新设备列表
+  /// 
+  /// 手动刷新当前可用的音频设备列表，解决重复设备问题
+  /// 适用于需要主动更新设备列表的场景
+  /// 
+  /// @return 刷新后的音频输入设备列表
+  Future<List<Map<String, dynamic>>> refreshDevices() async {
+    try {
+      if (!_checkInitialized()) return [];
+      
+      // 委托给设备管理器处理
+      return await _deviceManager.refreshDevices();
+    } catch (e) {
+      debugPrint('【RTC服务】刷新设备列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 获取音频输出设备列表
+  Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
+    try {
+      if (!_checkInitialized()) return [];
+      
+      // 委托给设备管理器处理
+      return await _deviceManager.getAudioOutputDevices();
+    } catch (e) {
+      debugPrint('【RTC服务】获取音频输出设备列表时发生错误: $e');
+      return [];
     }
   }
 
@@ -1413,6 +1178,7 @@ class RtcService {
     try {
       if (!_checkInitialized()) return null;
 
+      // 委托给设备管理器处理
       return await _deviceManager.getCurrentAudioInputDeviceId();
     } catch (e) {
       debugPrint('【RTC服务】获取当前音频输入设备ID时发生错误: $e');
@@ -1425,6 +1191,7 @@ class RtcService {
     try {
       if (!_checkInitialized()) return null;
 
+      // 委托给设备管理器处理
       return await _deviceManager.getCurrentAudioOutputDeviceId();
     } catch (e) {
       debugPrint('【RTC服务】获取当前音频输出设备ID时发生错误: $e');
@@ -1440,11 +1207,6 @@ class RtcService {
 
   /// 是否正在对话中
   bool get isInConversation => _isInConversation;
-
-  /// 获取消息历史
-  List<RtcAigcMessage> getMessageHistory() {
-    return List.unmodifiable(_messageHistory);
-  }
 
   /// 请求摄像头访问权限
   Future<bool> requestCameraAccess() async {
@@ -1498,10 +1260,46 @@ class RtcService {
       _userStopAudioCaptureController.close();
 
       _isDisposed = true;
-      _isInitialized = false;
-      debugPrint('【RTC服务】销毁完成');
     } catch (e) {
       debugPrint('【RTC服务】销毁时发生错误: $e');
     }
+  }
+
+  /// 获取MediaType.AUDIO常量
+  /// 由于在dart中无法直接访问枚举值，这个方法用于从JS获取MediaType.AUDIO常量
+  /// @return MediaType.AUDIO常量值
+  dynamic _getMediaTypeAudio() {
+    try {
+      // 从全局VERTC对象获取MediaType
+      final vertc = js_util.getProperty(js_util.globalThis, 'VERTC');
+      if (vertc == null) {
+        debugPrint('【RTC服务】无法获取VERTC全局对象');
+        return 0; // 默认值
+      }
+      
+      // 获取MediaType枚举
+      final mediaType = js_util.getProperty(vertc, 'MediaType');
+      if (mediaType == null) {
+        debugPrint('【RTC服务】无法获取MediaType枚举');
+        return 0; // 默认值
+      }
+      
+      // 获取AUDIO常量
+      final audioType = js_util.getProperty(mediaType, 'AUDIO');
+      if (audioType == null) {
+        debugPrint('【RTC服务】无法获取MediaType.AUDIO常量');
+        return 0; // 默认值
+      }
+      
+      return audioType;
+    } catch (e) {
+      debugPrint('【RTC服务】获取MediaType.AUDIO常量失败: $e');
+      return 0; // 默认值
+    }
+  }
+
+  /// 获取消息历史
+  List<RtcAigcMessage> getMessageHistory() {
+    return List.unmodifiable(_messageHistory);
   }
 }

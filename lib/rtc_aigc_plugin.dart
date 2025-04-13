@@ -318,24 +318,11 @@ class RtcAigcPlugin {
     required String userId,
     required String token,
   }) async {
-    try {
-      if (_rtcService != null) {
+    try { 
         return await _rtcService!
             .joinRoom(roomId: roomId, userId: userId, token: token);
-      } else {
-        final Map<String, dynamic> arguments = {
-          'roomId': roomId,
-          'userId': userId,
-          'token': token,
-        };
-
-        final result = await _channel.invokeMethod('joinRoom', arguments);
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
-      }
-    } catch (e) {
-      debugPrint('Error joining room: $e');
+    } catch (e, s) {
+      debugPrint('Error joining room: $e ${s.toString()}');
       if (_rtcService?.onStateChange != null) {
         _rtcService!.onStateChange!('error', 'Failed to join room: $e');
       }
@@ -405,7 +392,8 @@ class RtcAigcPlugin {
     } catch (e) {
       debugPrint('Error stopping conversation: $e');
       if (_rtcService?.onStateChange != null) {
-        _rtcService!.onStateChange!('error', 'Failed to stop conversation: $e');
+        _rtcService!.onStateChange!(
+            'error', 'Failed to stop conversation: $e');
       }
       return false;
     }
@@ -457,85 +445,197 @@ class RtcAigcPlugin {
   }
 
   /// 开始音频采集
-  static Future<Object> startAudioCapture({String? deviceId}) async {
+  static Future<Map<String, dynamic>> startAudioCapture({String? deviceId}) async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.startAudioCapture(deviceId);
-        // 检查返回值类型，转换为布尔值
         if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
           return result;
-        } else
-          return result['success'] == true;
-
-        return false;
+        }
+        return {'success': false, 'error': '未知返回类型'};
       } else {
         final result = await _channel
             .invokeMethod('startAudioCapture', {'deviceId': deviceId});
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
       }
     } catch (e) {
       debugPrint('Error starting audio capture: $e');
-      return false;
+      return {'success': false, 'error': e.toString()};
     }
   }
 
   /// 停止音频采集
-  static Future<bool> stopAudioCapture() async {
+  static Future<Map<String, dynamic>> stopAudioCapture() async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.stopAudioCapture();
-        // 检查返回值类型，转换为布尔值
         if (result is bool) {
-          return result;
+          return {'success': result};
         } else if (result is Map<String, dynamic>) {
-          return result['success'] == true;
+          return result;
         }
-        return false;
+        return {'success': false, 'error': '未知返回类型'};
       } else {
         final result = await _channel.invokeMethod('stopAudioCapture');
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
       }
     } catch (e) {
       debugPrint('Error stopping audio capture: $e');
-      return false;
+      return {'success': false, 'error': e.toString()};
     }
   }
 
   /// 静音/取消静音
-  static Future<Object> muteAudio(bool mute) async {
+  static Future<Map<String, dynamic>> muteAudio(bool mute) async {
     try {
       if (_rtcService != null) {
         // 通过停止/开始音频采集来实现静音
         if (mute) {
-          final result = await _rtcService!.stopAudioCapture();
-          if (result is bool) {
-            return result;
-          } else if (result is Map<String, dynamic>) {
-            return result['success'] == true;
-          }
-          return false;
+          return await stopAudioCapture();
         } else {
-          final result = await _rtcService!.startAudioCapture(null);
-          if (result is bool) {
-            return result;
-          } else
-            return result['success'] == true;
-
-          return false;
+          return await startAudioCapture();
         }
       } else {
         final result = await _channel.invokeMethod('muteAudio', {'mute': mute});
-        return result is bool
-            ? result
-            : (result is Map && result['success'] == true);
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
       }
     } catch (e) {
       debugPrint('Error muting audio: $e');
-      return false;
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// 设置音频采集音量
+  static Future<Map<String, dynamic>> setAudioCaptureVolume(int volume) async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.setAudioCaptureVolume(volume);
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      } else {
+        final result = await _channel.invokeMethod('setAudioCaptureVolume', {'volume': volume});
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error setting audio volume: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+  
+  /// 切换音频设备
+  static Future<Map<String, dynamic>> switchAudioDevice(String deviceId) async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.switchAudioDevice(deviceId);
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      } else {
+        final result = await _channel.invokeMethod('switchAudioDevice', {'deviceId': deviceId});
+        if (result is bool) {
+          return {'success': result};
+        } else if (result is Map<String, dynamic>) {
+          return result;
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error switching audio device: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// 获取音频输入设备列表
+  static Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
+    try {
+      if (_rtcService != null) {
+        return await _rtcService!.getAudioInputDevices();
+      } else {
+        final result = await _channel.invokeMethod('getAudioInputDevices');
+        if (result is List) {
+          return List<Map<String, dynamic>>.from(
+            result.map((item) => Map<String, dynamic>.from(item))
+          );
+        }
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Error getting audio input devices: $e');
+      return [];
+    }
+  }
+  
+  /// 刷新设备列表 - 手动调用以更新可用设备
+  /// 
+  /// 主动刷新当前可用的音频设备列表，解决重复设备问题
+  /// 当设备列表发生变化时，会自动发送通知到deviceStateStream
+  /// 
+  /// @return 刷新后的音频输入设备列表
+  static Future<List<Map<String, dynamic>>> refreshDevices() async {
+    try {
+      if (_rtcService != null) {
+        return await _rtcService!.refreshDevices();
+      } else {
+        final result = await _channel.invokeMethod('refreshDevices');
+        if (result is List) {
+          return List<Map<String, dynamic>>.from(
+            result.map((item) => Map<String, dynamic>.from(item))
+          );
+        }
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Error refreshing devices: $e');
+      return [];
+    }
+  }
+  
+  /// 获取音频输出设备列表
+  static Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
+    try {
+      if (_rtcService != null) {
+        return await _rtcService!.getAudioOutputDevices();
+      } else {
+        final result = await _channel.invokeMethod('getAudioOutputDevices');
+        if (result is List) {
+          return List<Map<String, dynamic>>.from(
+            result.map((item) => Map<String, dynamic>.from(item))
+          );
+        }
+        return [];
+      }
+    } catch (e) {
+      debugPrint('Error getting audio output devices: $e');
+      return [];
     }
   }
 }

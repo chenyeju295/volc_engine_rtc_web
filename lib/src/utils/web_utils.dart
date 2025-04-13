@@ -10,124 +10,123 @@ import 'package:flutter/services.dart';
 /// Web utilities for handling JavaScript interop and resource loading
 class WebUtils {
   static const String sdkAssetPath = 'sdk/volengine_Web_4.66.1.js';
+  
+  // SDK加载状态追踪
+  static bool _isLoadingSDK = false;
+  static Completer<void>? _sdkLoadCompleter;
 
-  /// Wait for SDK to load
+  /// 等待SDK加载完成
   static Future<void> waitForSdkLoaded() async {
-    final completer = Completer<void>();
-
-    try {
-      // Check if RTC objects already exist
-      if (!js.context.hasProperty('VERTC')) {
-        // Add event listener for script load
-        await _loadVERTCScripts(completer);
-      } else {
-        completer.complete();
-      }
-    } catch (e) {
-      debugPrint('Error while loading SDK: $e');
-      completer.completeError(e);
+    // 如果SDK已经加载，直接返回
+    if (js.context.hasProperty('VERTC')) {
+      return;
     }
-
-    return completer.future;
+    
+    // 如果正在加载，等待现有加载过程完成
+    if (_isLoadingSDK && _sdkLoadCompleter != null) {
+      return _sdkLoadCompleter!.future;
+    }
+    
+    // 开始新的加载过程
+    _isLoadingSDK = true;
+    _sdkLoadCompleter = Completer<void>();
+    
+    try {
+      // 尝试加载SDK
+      await _loadVERTCScripts();
+      _sdkLoadCompleter!.complete();
+    } catch (e) {
+      debugPrint('SDK加载失败: $e');
+      _sdkLoadCompleter!.completeError(e);
+    } finally {
+      _isLoadingSDK = false;
+    }
+    
+    return _sdkLoadCompleter!.future;
   }
 
-  /// Load VERTC scripts
-  static Future<void> _loadVERTCScripts(Completer<void> completer) async {
+  /// 加载VERTC脚本
+  static Future<void> _loadVERTCScripts() async {
+    debugPrint('开始加载RTC SDK...');
+    
+    // 方法1: 通过script标签加载
     try {
-      // Try loading the SDK from assets first
-      try {
-        debugPrint('Loading SDK from Flutter assets: $sdkAssetPath');
-
-        // Get the correct asset URL for web
-        final sdkUrl = await _getAssetUrl(sdkAssetPath);
-        debugPrint('Resolved SDK URL: $sdkUrl');
-
-        if (sdkUrl == null) {
-          throw Exception('Could not resolve asset URL for $sdkAssetPath');
-        }
-
-        // Try to pre-fetch the script content to avoid MIME type issues
-        try {
-          debugPrint('Pre-fetching script content to avoid MIME type issues');
-          final scriptContent = await _fetchScriptContent(sdkUrl);
-          await _injectScriptContent(scriptContent);
-
-          // Verify if RTC objects were loaded - allow a moment for scripts to initialize
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (!js.context.hasProperty('VERTC')) {
-            throw Exception('SDK not loaded properly after pre-fetch attempt');
-          }
-
-          debugPrint('SDK loaded successfully via pre-fetch method');
-          completer.complete();
+      final sdkUrl = await _getAssetUrl(sdkAssetPath);
+      if (sdkUrl == null) {
+        throw Exception('无法解析资源URL: $sdkAssetPath');
+      }
+      
+      debugPrint('通过script标签加载SDK: $sdkUrl');
+      await _loadScriptByTag(sdkUrl);
+      
+      // 验证加载结果
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (js.context.hasProperty('VERTC')) {
+        debugPrint('SDK加载成功 (方法1)');
+        return;
+      }
+    } catch (e) {
+      debugPrint('方法1加载失败: $e');
+      // 继续尝试下一种方法
+    }
+    
+    // 方法2: 预加载内容然后注入
+    try {
+      final sdkUrl = await _getAssetUrl(sdkAssetPath);
+      if (sdkUrl != null) {
+        debugPrint('预加载SDK内容后注入: $sdkUrl');
+        final content = await _fetchScriptContent(sdkUrl);
+        await _injectScriptContent(content);
+        
+        // 验证加载结果
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (js.context.hasProperty('VERTC')) {
+          debugPrint('SDK加载成功 (方法2)');
           return;
-        } catch (preFetchError) {
-          debugPrint(
-              'Pre-fetch method failed, trying direct script tag: $preFetchError');
-
-          // Fallback to traditional script tag loading
-          final scriptElement = html.ScriptElement();
-          scriptElement.type = 'application/javascript';
-          scriptElement.src = sdkUrl;
-
-          // Create a completion mechanism
-          final scriptCompleter = Completer<void>();
-
-          scriptElement.onLoad.listen((_) {
-            debugPrint('Script loaded successfully: $sdkUrl');
-            scriptCompleter.complete();
-          });
-
-          scriptElement.onError.listen((event) {
-            debugPrint('Error loading script: $sdkUrl');
-            scriptCompleter.completeError('Failed to load script: $sdkUrl');
-          });
-
-          // Add to document
-          html.document.head!.append(scriptElement);
-
-          // Wait for script to load
-          await scriptCompleter.future;
-
-          // Verify if RTC objects were loaded - allow a moment for scripts to initialize
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          // Final verification
-          if (!js.context.hasProperty('VERTC')) {
-            throw Exception(
-                'Volcano Engine RTC SDK not loaded properly - VERTC object not found');
-          }
-
-          debugPrint('Volcano Engine RTC SDK loaded successfully');
-          completer.complete();
-        }
-      } catch (e) {
-        debugPrint('Error with asset loading approach: $e');
-
-        // Fallback to loading the script inline from assets
-        try {
-          debugPrint(
-              'Trying fallback: load script content directly from assets');
-          await _loadScriptFromAssets(sdkAssetPath);
-
-          // Verify if RTC objects were loaded
-          if (!js.context.hasProperty('VERTC')) {
-            throw Exception('SDK not loaded properly after fallback attempt');
-          }
-
-          debugPrint('Volcano Engine RTC SDK loaded successfully via fallback');
-          completer.complete();
-        } catch (fallbackError) {
-          debugPrint('Error with all local loading approaches: $fallbackError');
-          completer.completeError(
-              'Failed to load SDK from local assets: $fallbackError');
         }
       }
     } catch (e) {
-      debugPrint('Failed to load VERTC scripts: $e');
-      completer.completeError(e);
+      debugPrint('方法2加载失败: $e');
+      // 继续尝试下一种方法
     }
+    
+    // 方法3: 直接从assets加载
+    try {
+      debugPrint('从assets直接加载SDK内容');
+      await _loadScriptFromAssets(sdkAssetPath);
+      
+      // 验证加载结果
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (js.context.hasProperty('VERTC')) {
+        debugPrint('SDK加载成功 (方法3)');
+        return;
+      }
+    } catch (e) {
+      debugPrint('方法3加载失败: $e');
+    }
+    
+    // 所有方法都失败
+    throw Exception('所有SDK加载方法都失败');
+  }
+  
+  /// 通过script标签加载脚本
+  static Future<void> _loadScriptByTag(String url) {
+    final completer = Completer<void>();
+    
+    final script = html.ScriptElement();
+    script.type = 'application/javascript';
+    script.src = url;
+    
+    script.onLoad.listen((_) {
+      completer.complete();
+    });
+    
+    script.onError.listen((event) {
+      completer.completeError('脚本加载失败: $url');
+    });
+    
+    html.document.head!.append(script);
+    return completer.future;
   }
 
   /// Fetch script content via XMLHttpRequest to handle MIME type issues
@@ -280,100 +279,98 @@ class WebUtils {
     return completer.future;
   }
 
-  /// Safely call a JavaScript method, handling null objects and exceptions
-  static dynamic safeJsCall(dynamic jsObject, String method,
-      [List<dynamic>? args]) {
-    if (jsObject == null) {
-      debugPrint('Cannot call $method: JavaScript object is null');
-      return null;
-    }
-
+  /// 通用的JavaScript方法调用函数
+  /// 处理函数参数包装，并支持直接调用或通过字符串路径调用
+  static dynamic callJs(dynamic target, String method, [List<dynamic>? args]) {
     try {
-      // 检查是否存在该方法（仅对js.JsObject类型有效）
-      if (jsObject is js.JsObject && !jsObject.hasProperty(method)) {
-        debugPrint('Warning: JavaScript object does not have method: $method');
-        return null;
+      if (target == null) {
+        throw Exception('JavaScript对象为空，无法调用方法：$method');
       }
-
-      // 调用方法
+      
+      // 支持通过字符串路径访问目标对象
+      if (target is String) {
+        final parts = target.split('.');
+        dynamic obj = js.context;
+        
+        for (int i = 0; i < parts.length; i++) {
+          if (obj.hasProperty(parts[i])) {
+            obj = obj[parts[i]];
+          } else {
+            throw Exception('找不到对象路径: ${parts.sublist(0, i + 1).join('.')}');
+          }
+        }
+        
+        if (method.isEmpty) {
+          return obj; // 如果只需要获取对象属性
+        }
+        target = obj;
+      }
+      
+      // 包装函数参数
+      List<dynamic> wrappedArgs = [];
       if (args != null) {
-        // 确保所有函数参数都用allowInterop包装
-        final wrappedArgs = args.map((arg) {
+        wrappedArgs = args.map((arg) {
           if (arg is Function) {
             return js_util.allowInterop(arg);
           }
           return arg;
         }).toList();
-
-        return jsObject is js.JsObject
-            ? jsObject.callMethod(method, wrappedArgs)
-            : js_util.callMethod(jsObject, method, wrappedArgs);
-      } else {
-        return jsObject is js.JsObject
-            ? jsObject.callMethod(method)
-            : js_util.callMethod(jsObject, method, []);
       }
+      
+      // 调用方法
+      return js_util.callMethod(target, method, wrappedArgs);
     } catch (e) {
-      debugPrint('Error calling $method: $e');
-      // 如果发生错误，尝试记录更多诊断信息
-      if (jsObject is js.JsObject) {
-        try {
-          final properties =
-              js.context['Object'].callMethod('keys', [jsObject]);
-          debugPrint('Available properties/methods: $properties');
-        } catch (e2) {
-          debugPrint('Could not enumerate properties: $e2');
+      debugPrint('调用方法失败: $method - $e');
+      throw Exception('调用JavaScript方法失败：$method - $e');
+    }
+  }
+  
+  /// 异步调用JavaScript方法
+  /// 自动处理Promise结果转换
+  static Future<dynamic> callJsAsync(dynamic target, String method, [List<dynamic>? args]) async {
+    try {
+      dynamic result = callJs(target, method, args);
+      
+      // 如果结果是Promise，转换为Future
+      if (result != null && js_util.hasProperty(result, 'then')) {
+        return await js_util.promiseToFuture(result);
+      }
+      
+      return result;
+    } catch (e) {
+      debugPrint('异步调用方法失败: $method - $e');
+      throw Exception('异步调用JavaScript方法失败：$method - $e');
+    }
+  }
+  
+  /// 获取JavaScript对象属性
+  static dynamic getProperty(dynamic target, String propertyPath) {
+    try {
+      if (target is String) {
+        // 拼接完整路径
+        propertyPath = '$target.$propertyPath';
+        target = js.context;
+      }
+      
+      final parts = propertyPath.split('.');
+      dynamic obj = target;
+      
+      for (int i = 0; i < parts.length; i++) {
+        if (obj == null) return null;
+        
+        if (obj is js.JsObject && obj.hasProperty(parts[i])) {
+          obj = obj[parts[i]];
+        } else if (js_util.hasProperty(obj, parts[i])) {
+          obj = js_util.getProperty(obj, parts[i]);
+        } else {
+          return null;
         }
       }
+      
+      return obj;
+    } catch (e) {
+      debugPrint('获取属性失败: $propertyPath - $e');
       return null;
-    }
-  }
-
-  /// Call a JavaScript method that returns a Promise
-  static dynamic callMethod(dynamic jsObject, String method,
-      [List<dynamic>? args]) {
-    if (jsObject == null) {
-      throw Exception('JavaScript object is null, cannot call $method');
-    }
-
-    try {
-      // 检查是否存在该方法（仅对js.JsObject类型有效）
-      if (jsObject is js.JsObject && !jsObject.hasProperty(method)) {
-        throw Exception('JavaScript object does not have method: $method');
-      }
-
-      if (args != null) {
-        return js_util.callMethod(jsObject, method, args);
-      } else {
-        return js_util.callMethod(jsObject, method, []);
-      }
-    } catch (e) {
-      debugPrint('Error calling $method: $e');
-      // 如果发生错误，尝试记录更多诊断信息
-      if (jsObject is js.JsObject) {
-        try {
-          final properties =
-              js.context['Object'].callMethod('keys', [jsObject]);
-          debugPrint('Available properties/methods: $properties');
-        } catch (e2) {
-          debugPrint('Could not enumerate properties: $e2');
-        }
-      }
-      throw Exception('Failed to call $method: $e');
-    }
-  }
-
-  /// Convert a JavaScript Promise to a Dart Future
-  static Future<T> promiseToFuture<T>(dynamic jsPromise) {
-    if (jsPromise == null) {
-      throw Exception('Promise is null');
-    }
-
-    try {
-      return js_util.promiseToFuture<T>(jsPromise);
-    } catch (e) {
-      debugPrint('Error converting Promise to Future: $e');
-      throw e;
     }
   }
 
@@ -418,41 +415,6 @@ class WebUtils {
   static void debugPrint(String message) {
     if (kDebugMode) {
       print('[WebUtils] $message');
-    }
-  }
-
-  /// 异步调用JavaScript方法并等待Promise结果
-  static Future<dynamic> callJsMethodAsync(dynamic jsObject, String method,
-      [List<dynamic>? args]) async {
-    if (jsObject == null) {
-      throw Exception('JavaScript object is null, cannot call $method');
-    }
-
-    try {
-      dynamic result;
-      if (args != null) {
-        // 确保所有函数参数都用allowInterop包装
-        final wrappedArgs = args.map((arg) {
-          if (arg is Function) {
-            return js_util.allowInterop(arg);
-          }
-          return arg;
-        }).toList();
-
-        result = js_util.callMethod(jsObject, method, wrappedArgs);
-      } else {
-        result = js_util.callMethod(jsObject, method, []);
-      }
-
-      // 如果结果是Promise，等待它完成
-      if (js_util.hasProperty(result, 'then')) {
-        return await js_util.promiseToFuture(result);
-      }
-
-      return result;
-    } catch (e) {
-      debugPrint('Error calling $method async: $e');
-      throw Exception('Failed to call $method async: $e');
     }
   }
 
@@ -569,33 +531,6 @@ class WebUtils {
     }
   }
 
-  /// Call a JavaScript method directly
-  static dynamic callJsMethod(dynamic jsObject, String method,
-      [List<dynamic>? args]) {
-    if (jsObject == null) {
-      throw Exception('JavaScript object is null, cannot call $method');
-    }
-
-    try {
-      if (args != null) {
-        // 确保所有函数参数都用allowInterop包装
-        final wrappedArgs = args.map((arg) {
-          if (arg is Function) {
-            return js_util.allowInterop(arg);
-          }
-          return arg;
-        }).toList();
-
-        return js_util.callMethod(jsObject, method, wrappedArgs);
-      } else {
-        return js_util.callMethod(jsObject, method, []);
-      }
-    } catch (e) {
-      debugPrint('Error calling method $method: $e');
-      throw Exception('Failed to call method $method: $e');
-    }
-  }
-
   /// 检查全局对象是否存在
   static Future<bool> checkObjectExists(String objectName) async {
     try {
@@ -638,7 +573,6 @@ class WebUtils {
     }
   }
 
-  /// Call a JavaScript method that returns a Promise, and convert the promise to a Dart Future
   static Future<dynamic> callMethodAsync(dynamic jsObject, String method,
       [List<dynamic>? args]) async {
     if (jsObject == null) {
@@ -715,148 +649,90 @@ class WebUtils {
     }
   }
 
-  /// Convert binary data to Uint8List
+  /// 将二进制数据转换为Uint8List
+  /// 简化版本，专注于常见场景并减少日志输出
   static Uint8List binaryToUint8List(dynamic binaryData) {
     try {
-      // If already a Uint8List, return as is
+      // 已经是Uint8List，直接返回
       if (binaryData is Uint8List) {
         return binaryData;
       }
+      
+      // 处理List<int>
+      if (binaryData is List<int>) {
+        return Uint8List.fromList(binaryData);
+      }
 
-      // Handle ArrayBuffer or TypedArray
-      if (js_util.hasProperty(binaryData, 'byteLength')) {
-        // Create Uint8Array view if data is an ArrayBuffer
+      // 处理ArrayBuffer或TypedArray
+      if (binaryData != null && js_util.hasProperty(binaryData, 'byteLength')) {
+        // 创建Uint8Array视图
         final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT') 
-            ? binaryData  // Already a TypedArray
+            ? binaryData  // 已经是TypedArray
             : js_util.callConstructor(
                 js_util.getProperty(js_util.globalThis, 'Uint8Array'), [binaryData]);
         
-        // Get the length of the array
+        // 获取数组长度
         final int length = js_util.getProperty(uint8Array, 'length');
         
-        // Create a Uint8List and copy the data
+        // 创建Uint8List并复制数据
         final Uint8List result = Uint8List(length);
         for (int i = 0; i < length; i++) {
           result[i] = js_util.getProperty(uint8Array, i);
         }
         
-        // Log first few bytes for debugging
-        final int debugLength = length > 10 ? 10 : length;
-        List<int> debugBytes = [];
-        for (int i = 0; i < debugLength; i++) {
-          debugBytes.add(result[i]);
-        }
-        debugPrint('First $debugLength bytes: $debugBytes');
-        
         return result;
       }
 
-      // Handle Blob
-      if (js_util.instanceOfString(binaryData, 'Blob')) {
-        debugPrint('Warning: Sync conversion of Blob not supported, returning empty Uint8List');
-        return Uint8List(0);
-      }
-
-      // Try direct conversion for other types
-      if (binaryData is List<int>) {
-        return Uint8List.fromList(binaryData);
-      }
-
-      // If all else fails, return empty Uint8List
-      debugPrint('Warning: Unable to convert binary data to Uint8List, type: ${binaryData.runtimeType}');
+      // 处理失败，返回空数组
       return Uint8List(0);
     } catch (e) {
-      debugPrint('Error converting binary to Uint8List: $e');
+      debugPrint('二进制数据转换失败: $e');
       return Uint8List(0);
     }
   }
 
-  /// Convert a binary message to a string with robust error handling
+  /// 将二进制消息转换为字符串
+  /// 简化版本，使用最常见的编码方式和最小日志输出
   static String binaryToString(dynamic binaryData) {
     try {
-      // First check if it's already a string
+      // 已经是字符串直接返回
       if (binaryData is String) {
         return binaryData;
       }
 
-      // First convert to Uint8List for consistent handling
+      // 转换为Uint8List
       final Uint8List bytes = binaryToUint8List(binaryData);
-      
       if (bytes.isEmpty) {
-        debugPrint('Empty binary data');
         return '';
       }
       
-      // Check for TLV format markers based on known message types
-      // The first 4 bytes might be 'conv', 'subv', or 'func'
-      if (bytes.length >= 4) {
-        final String magicString = String.fromCharCodes(bytes.sublist(0, 4));
-        debugPrint('Magic string: $magicString');
-        
-        if (magicString == 'conv' || magicString == 'subv' || magicString == 'func') {
-          // This might be a TLV format message - we need to parse only the content portion
-          if (bytes.length >= 8) {
-            // Get content length from TLV header
-            final int contentLength = 
-                (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-                
-            debugPrint('TLV content length: $contentLength');
-            
-            if (contentLength > 0 && bytes.length >= (8 + contentLength)) {
-              // Extract content portion
-              final contentBytes = bytes.sublist(8, 8 + contentLength);
-              
-              try {
-                // Try utf8 decoding first
-                final String result = utf8.decode(contentBytes);
-                debugPrint('Successfully decoded TLV content as UTF-8');
-                return result;
-              } catch (utf8Error) {
-                debugPrint('UTF-8 decoding failed for TLV content: $utf8Error');
-                // Fall through to the regular decoding below
-              }
+      // 检查常见的TLV格式标记
+      if (bytes.length >= 8) {
+        final String magic = String.fromCharCodes(bytes.sublist(0, 4));
+        if (magic == 'conv' || magic == 'subv' || magic == 'func') {
+          // 解析TLV格式消息
+          final int contentLength = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+          
+          if (contentLength > 0 && bytes.length >= (8 + contentLength)) {
+            try {
+              // 提取内容部分并解码
+              return utf8.decode(bytes.sublist(8, 8 + contentLength));
+            } catch (_) {
+              // 解码失败，继续使用常规方法
             }
           }
         }
       }
       
-      // Try multiple decoding approaches
-      // 1. UTF-8 with replacement
+      // 尝试用UTF-8解码（最常见的情况）
       try {
         return utf8.decode(bytes, allowMalformed: true);
-      } catch (e) {
-        debugPrint('UTF-8 decoding failed: $e');
-      }
-      
-      // 2. Try latin1 as a fallback
-      try {
+      } catch (_) {
+        // UTF-8解码失败时使用Latin1作为备选
         return latin1.decode(bytes);
-      } catch (e) {
-        debugPrint('latin1 decoding failed: $e');
       }
-      
-      // 3. Try extracting JSON if present
-      final String rawText = String.fromCharCodes(bytes);
-      final int jsonStart = rawText.indexOf('{');
-      final int jsonEnd = rawText.lastIndexOf('}');
-      
-      if (jsonStart >= 0 && jsonEnd > jsonStart) {
-        final String jsonPart = rawText.substring(jsonStart, jsonEnd + 1);
-        try {
-          // Validate if it's valid JSON
-          json.decode(jsonPart);
-          debugPrint('Successfully extracted JSON part from binary data');
-          return jsonPart;
-        } catch (e) {
-          debugPrint('Extracted text is not valid JSON: $e');
-        }
-      }
-      
-      // 4. Last resort: just return the raw string with replacement characters
-      return rawText;
     } catch (e) {
-      debugPrint('Error converting binary to string: $e');
-      return '';
+      return ''; // 错误情况下返回空字符串
     }
   }
 
@@ -879,65 +755,120 @@ class WebUtils {
     }
   }
 
-  /// Get audio input devices - Direct implementation based on RtcClient.ts
+  // 设备缓存
+  static List<dynamic>? _cachedAudioInputDevices;
+  static List<dynamic>? _cachedAudioOutputDevices;
+  static DateTime? _lastAudioInputDeviceRefresh;
+  static DateTime? _lastAudioOutputDeviceRefresh;
+  
+  // 缓存有效期（毫秒）
+  static const int _deviceCacheValidityMs = 2000; // 2秒
+
+  /// 获取音频输入设备列表（带缓存）
   static Future<List<dynamic>> getAudioInputDevices() async {
+    // 检查缓存是否有效
+    final now = DateTime.now();
+    if (_cachedAudioInputDevices != null && 
+        _lastAudioInputDeviceRefresh != null && 
+        now.difference(_lastAudioInputDeviceRefresh!).inMilliseconds < _deviceCacheValidityMs) {
+      // 使用缓存，不打印日志，减少重复信息
+      return _cachedAudioInputDevices!;
+    }
+
     try {
-      debugPrint('Getting audio input devices');
-      // Make sure SDK is loaded
+      // 确保SDK已加载
       if (!isSdkLoaded()) {
         await waitForSdkLoaded();
       }
 
-      // Get VERTC object directly from global scope
-      final vertcObj = js_util.getProperty(js_util.globalThis, 'VERTC');
+      // 从全局作用域获取VERTC对象
+      final vertcObj = getProperty(js_util.globalThis, 'VERTC');
       if (vertcObj == null) {
-        throw Exception('VERTC object not found in global scope');
+        throw Exception('VERTC对象未在全局作用域中找到');
       }
 
-      // Call enumerateAudioCaptureDevices directly (similar to the TS implementation)
-      debugPrint('Calling VERTC.enumerateAudioCaptureDevices()');
-      final devicesPromise =
-          js_util.callMethod(vertcObj, 'enumerateAudioCaptureDevices', []);
-
-      // Convert to Future and return
-      final devices = await js_util.promiseToFuture(devicesPromise);
-      debugPrint(
-          'Got ${js_util.getProperty(devices, 'length')} audio input devices');
-      return devices;
+      // 调用SDK方法获取设备列表
+      final devices = await callJsAsync(vertcObj, 'enumerateAudioCaptureDevices');
+      
+      if (devices != null) {
+        final length = getProperty(devices, 'length') ?? 0;
+        
+        // 只有首次或设备数量变化时才打印日志
+        if (_cachedAudioInputDevices == null || 
+            _cachedAudioInputDevices!.length != length) {
+          debugPrint('获取到 $length 个音频输入设备');
+        }
+        
+        // 更新缓存
+        _cachedAudioInputDevices = devices;
+        _lastAudioInputDeviceRefresh = now;
+      }
+      
+      return devices ?? [];
     } catch (e) {
-      debugPrint('Error getting audio input devices: $e');
-      return [];
+      debugPrint('获取音频输入设备列表失败: $e');
+      return _cachedAudioInputDevices ?? [];
     }
   }
 
-  /// Get audio output devices - Direct implementation based on RtcClient.ts
+  /// 获取音频输出设备列表（带缓存）
   static Future<List<dynamic>> getAudioOutputDevices() async {
+    // 检查缓存是否有效
+    final now = DateTime.now();
+    if (_cachedAudioOutputDevices != null && 
+        _lastAudioOutputDeviceRefresh != null && 
+        now.difference(_lastAudioOutputDeviceRefresh!).inMilliseconds < _deviceCacheValidityMs) {
+      // 使用缓存，不打印日志
+      return _cachedAudioOutputDevices!;
+    }
+
     try {
-      debugPrint('Getting audio output devices');
-      // Make sure SDK is loaded
+      // 确保SDK已加载
       if (!isSdkLoaded()) {
         await waitForSdkLoaded();
       }
 
-      // Get VERTC object directly from global scope
-      final vertcObj = js_util.getProperty(js_util.globalThis, 'VERTC');
+      // 从全局作用域获取VERTC对象
+      final vertcObj = getProperty(js_util.globalThis, 'VERTC');
       if (vertcObj == null) {
-        throw Exception('VERTC object not found in global scope');
+        throw Exception('VERTC对象未在全局作用域中找到');
       }
 
-      // Call enumerateAudioPlaybackDevices directly (similar to the TS implementation)
-      debugPrint('Calling VERTC.enumerateAudioPlaybackDevices()');
-      final devicesPromise =
-          js_util.callMethod(vertcObj, 'enumerateAudioPlaybackDevices', []);
-
-      // Convert to Future and return
-      final devices = await js_util.promiseToFuture(devicesPromise);
-      debugPrint(
-          'Got ${js_util.getProperty(devices, 'length')} audio output devices');
-      return devices;
+      // 调用SDK方法获取设备列表
+      final devices = await callJsAsync(vertcObj, 'enumerateAudioPlaybackDevices');
+      
+      if (devices != null) {
+        final length = getProperty(devices, 'length') ?? 0;
+        
+        // 只有首次或设备数量变化时才打印日志
+        if (_cachedAudioOutputDevices == null || 
+            _cachedAudioOutputDevices!.length != length) {
+          debugPrint('获取到 $length 个音频输出设备');
+        }
+        
+        // 更新缓存
+        _cachedAudioOutputDevices = devices;
+        _lastAudioOutputDeviceRefresh = now;
+      }
+      
+      return devices ?? [];
     } catch (e) {
-      debugPrint('Error getting audio output devices: $e');
-      return [];
+      debugPrint('获取音频输出设备列表失败: $e');
+      return _cachedAudioOutputDevices ?? [];
     }
+  }
+  
+  /// 强制刷新设备列表缓存
+  static Future<void> refreshDeviceCaches() async {
+    _cachedAudioInputDevices = null;
+    _cachedAudioOutputDevices = null;
+    _lastAudioInputDeviceRefresh = null;
+    _lastAudioOutputDeviceRefresh = null;
+    
+    // 重新获取并缓存设备列表
+    await getAudioInputDevices();
+    await getAudioOutputDevices();
+    
+    debugPrint('设备列表缓存已刷新');
   }
 }

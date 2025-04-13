@@ -290,7 +290,10 @@ class ProviderParams {
 /// Provider : "volcano"
 /// ProviderParams : {"app":{"AppId":"4799544484","Cluster":"volcano_tts"},"audio":{"voice_type":"BV001_streaming","speed_ratio":1}}
 /// IgnoreBracketText : [1,2,3,4,5]
-
+/// Provider : "volcano"
+/// ProviderParams : {"app":{"AppId":"4799544484","Cluster":"volcano_tts"}}
+/// IgnoreBracketText : [1,2,3,4,5]
+/// audio : {"voice_type":"BV001_streaming","speed_ratio":1}
 TtsConfig ttsConfigFromJson(String str) => TtsConfig.fromJson(json.decode(str));
 String ttsConfigToJson(TtsConfig data) => json.encode(data.toJson());
 
@@ -299,6 +302,7 @@ class TtsConfig {
     this.provider,
     this.providerParams,
     this.ignoreBracketText,
+    this.audio,
   });
 
   TtsConfig.fromJson(dynamic json) {
@@ -309,19 +313,23 @@ class TtsConfig {
     ignoreBracketText = json['IgnoreBracketText'] != null
         ? json['IgnoreBracketText'].cast<num>()
         : [];
+    audio = json['audio'] != null ? Audio.fromJson(json['audio']) : null;
   }
   String? provider;
   ProviderParams? providerParams;
   List<num>? ignoreBracketText;
+  Audio? audio;
   TtsConfig copyWith({
     String? provider,
     ProviderParams? providerParams,
     List<num>? ignoreBracketText,
+    Audio? audio,
   }) =>
       TtsConfig(
         provider: provider ?? this.provider,
         providerParams: providerParams ?? this.providerParams,
         ignoreBracketText: ignoreBracketText ?? this.ignoreBracketText,
+        audio: audio ?? this.audio,
       );
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{};
@@ -329,6 +337,7 @@ class TtsConfig {
     if (providerParams != null) {
       map['ProviderParams'] = providerParams?.toJson();
     }
+    map['audio'] = audio?.toJson();
     map['IgnoreBracketText'] = ignoreBracketText;
     return map;
   }
