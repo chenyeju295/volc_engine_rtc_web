@@ -574,6 +574,179 @@ class RtcAigcPlugin {
     }
   }
 
+  /// 启动音频播放设备测试
+  /// 
+  /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
+  /// 
+  /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @return 测试结果 Map<String, dynamic>
+  static Future<Map<String, dynamic>> startAudioPlaybackDeviceTest(
+      String filePath, int indicationInterval) async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.startAudioPlaybackDeviceTest(
+          filePath, indicationInterval);
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': true};
+      } else {
+        final result = await _channel.invokeMethod(
+          'startAudioPlaybackDeviceTest', 
+          {'filePath': filePath, 'indicationInterval': indicationInterval}
+        );
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error starting audio playback device test: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+  
+  /// 停止音频播放设备测试
+  /// 
+  /// @return 测试结果 Map<String, dynamic>
+  static Future<Map<String, dynamic>> stopAudioPlaybackDeviceTest() async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.stopAudioPlaybackDeviceTest();
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': true};
+      } else {
+        final result = await _channel.invokeMethod('stopAudioPlaybackDeviceTest');
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error stopping audio playback device test: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+  
+  /// 开始音频采集设备和播放设备测试
+  /// 
+  /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
+  /// 
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
+  /// @return 测试结果 Map<String, dynamic>
+  static Future<Map<String, dynamic>> startAudioDeviceRecordTest(
+      int indicationInterval,
+      {Function? onAutoplayFailed}) async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.startAudioDeviceRecordTest(
+          indicationInterval,
+          onAutoplayFailed: onAutoplayFailed
+        );
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': true};
+      } else {
+        final result = await _channel.invokeMethod(
+          'startAudioDeviceRecordTest', 
+          {'indicationInterval': indicationInterval}
+        );
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error starting audio device record test: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+  
+  /// 停止采集本地音频，并开始播放采集到的声音
+  /// 
+  /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
+  /// 
+  /// @return 测试结果 Map<String, dynamic>
+  static Future<Map<String, dynamic>> stopAudioDeviceRecordAndPlayTest() async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.stopAudioDeviceRecordAndPlayTest();
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': true};
+      } else {
+        final result = await _channel.invokeMethod('stopAudioDeviceRecordAndPlayTest');
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error stopping audio device record and play test: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+  
+  /// 停止音频设备播放测试
+  /// 
+  /// @return 测试结果 Map<String, dynamic>
+  static Future<Map<String, dynamic>> stopAudioDevicePlayTest() async {
+    try {
+      if (_rtcService != null) {
+        final result = await _rtcService!.stopAudioDevicePlayTest();
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': true};
+      } else {
+        final result = await _channel.invokeMethod('stopAudioDevicePlayTest');
+        
+        if (result is Map<String, dynamic>) {
+          return result;
+        } else if (result is bool) {
+          return {'success': result};
+        }
+        return {'success': false, 'error': '未知返回类型'};
+      }
+    } catch (e) {
+      debugPrint('Error stopping audio device play test: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// 获取音频输入设备列表
   static Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
     try {

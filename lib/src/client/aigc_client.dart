@@ -239,13 +239,22 @@ class AigcClient {
       // 更新状态为等待响应
       _setState(AigcClientState.responding);
 
+      // {
+      //     "AppId": "661e****543cf", // RTC 应用 AppId
+      //     "RoomId": "Room1", // 会话房间 ID
+      //     "TaskId": "task1", // 会话任务 ID
+      //     "Command": "ExternalTextToSpeech", //控制命令，此处填入 ExternalTextToSpeech
+      //     "Message": "你刚才的故事讲的真棒，能再讲一个吗。" // 自定义文本内容，长度不超过 200 个字符。
+      //     "InterruptMode": 1 //文本内容播报的优先级。
+      // }
       // 发送更新命令给AI
       final params = {
         'AppId': config.appId,
         'RoomId': config.roomId,
         'TaskId': config.taskId,
-        'Command': 'Text',
+        'Command': 'EXTERNAL_TEXT_TO_SPEECH',
         'Message': text,
+        "InterruptMode": 1
       };
 
       final result = await _post(

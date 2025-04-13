@@ -66,12 +66,6 @@ class RtcEngineManager {
 
       debugPrint('【RTC引擎】RTC引擎创建成功');
 
-      // 启用音频属性报告
-      js_util.callMethod(engine, 'enableAudioPropertiesReport', [
-        js_util.jsify({'interval': 1000})
-      ]);
-      debugPrint('【RTC引擎】已启用音频属性报告，间隔: 1000ms');
-
       // 尝试添加AI降噪扩展（可选，如果失败不会影响主要功能）
       try {
         debugPrint('【RTC引擎】尝试加载AI降噪扩展...');
@@ -109,7 +103,12 @@ class RtcEngineManager {
 
     try {
       debugPrint('【加入房间】正在加入RTC房间: ${roomId}');
-      debugPrint('【加入房间】token: ${'已设置 '}');
+      
+      // 启用音频属性报告
+      js_util.callMethod(engine, 'enableAudioPropertiesReport', [
+        js_util.jsify({'interval': 1000})
+      ]);
+      debugPrint('【RTC引擎】已启用音频属性报告，间隔: 1000ms');
 
       // 设置用户信息
       final extraInfo = WebUtils.stringify(js_util.jsify({

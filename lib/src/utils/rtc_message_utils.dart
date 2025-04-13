@@ -369,4 +369,155 @@ class RtcMessageUtils {
       }
     }
   }
+}
+
+/// 音频设备测试工具类
+/// 提供音频设备测试相关的方法
+class RtcDeviceTestUtils {
+  /// 启动音频播放设备测试
+  /// 
+  /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
+  /// 
+  /// @param rtcEngine RTC引擎实例
+  /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @return 测试结果 Future
+  static Future<void> startAudioPlaybackDeviceTest(
+      dynamic rtcEngine, 
+      String filePath, 
+      int indicationInterval) async {
+    try {
+      if (rtcEngine == null) {
+        throw Exception('RTC引擎未初始化');
+      }
+      
+      debugPrint('开始音频播放设备测试，文件: $filePath, 间隔: $indicationInterval ms');
+      
+      // 调用SDK方法
+      final result = js_util.callMethod(
+          rtcEngine, 
+          'startAudioPlaybackDeviceTest', 
+          [filePath, indicationInterval]);
+      
+      // 处理返回的Promise
+      return js_util.promiseToFuture(result);
+    } catch (e) {
+      debugPrint('启动音频播放设备测试失败: $e');
+      throw Exception('启动音频播放设备测试失败: $e');
+    }
+  }
+  
+  /// 停止音频播放设备测试
+  /// 
+  /// @param rtcEngine RTC引擎实例
+  static void stopAudioPlaybackDeviceTest(dynamic rtcEngine) {
+    try {
+      if (rtcEngine == null) {
+        throw Exception('RTC引擎未初始化');
+      }
+      
+      debugPrint('停止音频播放设备测试');
+      
+      // 调用SDK方法
+      js_util.callMethod(rtcEngine, 'stopAudioPlaybackDeviceTest', []);
+    } catch (e) {
+      debugPrint('停止音频播放设备测试失败: $e');
+      throw Exception('停止音频播放设备测试失败: $e');
+    }
+  }
+  
+  /// 开始音频采集设备和播放设备测试
+  /// 
+  /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
+  /// 
+  /// @param rtcEngine RTC引擎实例
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
+  /// @return 测试结果 Future
+  static Future<void> startAudioDeviceRecordTest(
+      dynamic rtcEngine, 
+      int indicationInterval,
+      [Function? onAutoplayFailed]) async {
+    try {
+      if (rtcEngine == null) {
+        throw Exception('RTC引擎未初始化');
+      }
+      
+      debugPrint('开始音频设备录制测试，间隔: $indicationInterval ms');
+      
+      // 处理回调函数
+      dynamic wrappedCallback;
+      if (onAutoplayFailed != null) {
+        wrappedCallback = js_util.allowInterop((resume) {
+          // 包装resume函数为Future
+          final Future<dynamic> Function() wrappedResume = () async {
+            try {
+              final jsResult = resume();
+              return js_util.promiseToFuture(jsResult);
+            } catch (e) {
+              debugPrint('恢复播放失败: $e');
+              return null;
+            }
+          };
+          
+          // 调用回调
+          onAutoplayFailed(wrappedResume);
+        });
+      }
+      
+      // 调用SDK方法
+      List<dynamic> args = [indicationInterval];
+      if (wrappedCallback != null) {
+        args.add(wrappedCallback);
+      }
+      
+      final result = js_util.callMethod(rtcEngine, 'startAudioDeviceRecordTest', args);
+      
+      // 处理返回的Promise
+      return js_util.promiseToFuture(result);
+    } catch (e) {
+      debugPrint('开始音频设备录制测试失败: $e');
+      throw Exception('开始音频设备录制测试失败: $e');
+    }
+  }
+  
+  /// 停止采集本地音频，并开始播放采集到的声音
+  /// 
+  /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
+  /// 
+  /// @param rtcEngine RTC引擎实例
+  static void stopAudioDeviceRecordAndPlayTest(dynamic rtcEngine) {
+    try {
+      if (rtcEngine == null) {
+        throw Exception('RTC引擎未初始化');
+      }
+      
+      debugPrint('停止录制并开始播放测试音频');
+      
+      // 调用SDK方法
+      js_util.callMethod(rtcEngine, 'stopAudioDeviceRecordAndPlayTest', []);
+    } catch (e) {
+      debugPrint('停止录制并播放测试失败: $e');
+      throw Exception('停止录制并播放测试失败: $e');
+    }
+  }
+  
+  /// 停止音频设备播放测试
+  /// 
+  /// @param rtcEngine RTC引擎实例
+  static void stopAudioDevicePlayTest(dynamic rtcEngine) {
+    try {
+      if (rtcEngine == null) {
+        throw Exception('RTC引擎未初始化');
+      }
+      
+      debugPrint('停止音频设备播放测试');
+      
+      // 调用SDK方法
+      js_util.callMethod(rtcEngine, 'stopAudioDevicePlayTest', []);
+    } catch (e) {
+      debugPrint('停止音频设备播放测试失败: $e');
+      throw Exception('停止音频设备播放测试失败: $e');
+    }
+  }
 } 

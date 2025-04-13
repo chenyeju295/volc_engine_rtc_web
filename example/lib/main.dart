@@ -70,6 +70,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   StreamSubscription? _userStartAudioCaptureSubscription;
   StreamSubscription? _userStopAudioCaptureSubscription;
 
+  late RtcAigcPlugin _rtcEngine;
+  bool _isAudioTestRunning = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,7 +119,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
         serverUrl: 'http://localhost:3001',
         agentConfig: AgentConfig(
-          userId: 'RobotMan_',
+          userId: 'RobotMan_123',
           welcomeMessage: '你好，我是你的AI小助手，有什么可以帮你的吗？',
           enableConversationStateCallback: true,
           serverMessageSignatureForRTS: 'conversation',
@@ -134,8 +137,6 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
               temperature: 0.1,
               topP: 0.3,
               welcomeSpeech: "你好，我是你的AI小助手，有什么可以帮你的吗？",
-              modeSourceType: 'Available',
-              feature: r'{\"Http\":true}',
               ),
              
             
@@ -555,6 +556,46 @@ await Future.delayed(const Duration(seconds: 1));
     _scrollToBottom();
   }
 
+  // 开始音频测试
+  Future<void> _startAudioTest() async {
+    if (_isAudioTestRunning) return;
+    
+    try {
+      Map<String, dynamic> result = await RtcAigcPlugin.startAudioPlaybackDeviceTest( "http://music.163.com/song/media/outer/url?id=447925558.mp3",200);
+      
+      if (result['success']) {
+        setState(() {
+          _isAudioTestRunning = true;
+        });
+        _addSystemMessage('音频设备测试已开始');
+      } else {
+        _addSystemMessage('开始音频设备测试失败: ${result['error']}');
+      }
+    } catch (e) {
+      _addSystemMessage('开始音频设备测试出错: $e');
+    }
+  }
+
+  // 停止音频测试
+  Future<void> _stopAudioTest() async {
+    if (!_isAudioTestRunning) return;
+    
+    try {
+      Map<String, dynamic> result = await RtcAigcPlugin.stopAudioDeviceRecordAndPlayTest();
+      
+      if (result['success']) {
+        setState(() {
+          _isAudioTestRunning = false;
+        });
+        _addSystemMessage('音频设备测试已停止');
+      } else {
+        _addSystemMessage('停止音频设备测试失败: ${result['error']}');
+      }
+    } catch (e) {
+      _addSystemMessage('停止音频设备测试出错: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -715,6 +756,29 @@ await Future.delayed(const Duration(seconds: 1));
                 _buildStatusItem(
                     '音频采集', _isAiAudioCaptureStarted ? '已开始' : '未开始'),
                 _buildStatusItem('媒体发布', _isAiPublished ? '已发布' : '未发布'),
+              ],
+            ),
+          ),
+        ),
+
+        // 音频设备测试 (新增卡片)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('音频设备测试', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isInitialized ? _startAudioTest : null,
+                  child: const Text('开始音频测试'),
+                ),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _isInitialized ? _stopAudioTest : null,
+                  child: const Text('停止音频测试'),
+                ),
               ],
             ),
           ),

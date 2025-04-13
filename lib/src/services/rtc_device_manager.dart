@@ -550,6 +550,201 @@ class RtcDeviceManager {
     }
   }
 
+  /// 启动音频播放设备测试
+  /// 
+  /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
+  /// 
+  /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @return 测试结果 AudioResult
+  Future<AudioResult> startAudioPlaybackDeviceTest(String filePath, int indicationInterval) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+      
+      debugPrint('开始音频播放设备测试: $filePath, 间隔: $indicationInterval ms');
+      
+      try {
+        // 调用SDK方法
+        await WebUtils.callJsAsync(
+          engine, 
+          'startAudioPlaybackDeviceTest', 
+          [filePath, indicationInterval]
+        );
+        
+        debugPrint('音频播放设备测试启动成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('启动音频播放设备测试失败: $e');
+        return AudioResult.failure('启动音频播放设备测试失败: $e');
+      }
+    } catch (e) {
+      debugPrint('启动音频播放设备测试过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+  
+  /// 停止音频播放设备测试
+  /// 
+  /// @return 测试结果 AudioResult
+  Future<AudioResult> stopAudioPlaybackDeviceTest() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+      
+      debugPrint('停止音频播放设备测试');
+      
+      try {
+        // 调用SDK方法
+        WebUtils.callJs(engine, 'stopAudioPlaybackDeviceTest', []);
+        
+        debugPrint('音频播放设备测试停止成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('停止音频播放设备测试失败: $e');
+        return AudioResult.failure('停止音频播放设备测试失败: $e');
+      }
+    } catch (e) {
+      debugPrint('停止音频播放设备测试过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+  
+  /// 开始音频采集设备和播放设备测试
+  /// 
+  /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
+  /// 
+  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
+  /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
+  /// @return 测试结果 AudioResult
+  Future<AudioResult> startAudioDeviceRecordTest(
+      int indicationInterval,
+      {Function? onAutoplayFailed}) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+      
+      debugPrint('开始音频设备录制测试，间隔: $indicationInterval ms');
+      
+      try {
+        // 处理回调函数
+        dynamic wrappedCallback;
+        if (onAutoplayFailed != null) {
+          wrappedCallback = js_util.allowInterop((resume) {
+            // 包装resume函数为Future
+            final Future<dynamic> Function() wrappedResume = () async {
+              try {
+                final jsResult = resume();
+                return js_util.promiseToFuture(jsResult);
+              } catch (e) {
+                debugPrint('恢复播放失败: $e');
+                return null;
+              }
+            };
+            
+            // 调用回调
+            onAutoplayFailed(wrappedResume);
+          });
+        }
+        
+        // 调用SDK方法
+        List<dynamic> args = [indicationInterval];
+        if (wrappedCallback != null) {
+          args.add(wrappedCallback);
+        }
+        
+        await WebUtils.callJsAsync(engine, 'startAudioDeviceRecordTest', args);
+        
+        debugPrint('音频设备录制测试启动成功');
+        return AudioResult.success();
+      } catch (e) {
+        String errorMsg = e.toString();
+        String errorCode = AudioErrorCode.UNKNOWN_ERROR;
+        
+        if (errorMsg.contains('NOT_SUPPORTED')) {
+          errorCode = 'NOT_SUPPORTED';
+          errorMsg = '浏览器不支持设置音频播放设备或测试音频采集/播放设备';
+        } else if (errorMsg.contains('REPEAT_DEVICE_TEST')) {
+          errorCode = 'REPEAT_DEVICE_TEST';
+          errorMsg = '重复开启检测';
+        } else if (errorMsg.contains('AUDIO_DEVICE_RECORD_FAILED')) {
+          errorCode = 'AUDIO_DEVICE_RECORD_FAILED';
+          errorMsg = '开启音频设备测试失败，请重试';
+        }
+        
+        debugPrint('开始音频设备录制测试失败: [$errorCode] $errorMsg');
+        return AudioResult.failure(errorMsg, errorCode);
+      }
+    } catch (e) {
+      debugPrint('开始音频设备录制测试过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+  
+  /// 停止采集本地音频，并开始播放采集到的声音
+  /// 
+  /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
+  /// 
+  /// @return 测试结果 AudioResult
+  Future<AudioResult> stopAudioDeviceRecordAndPlayTest() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+      
+      debugPrint('停止录制并开始播放测试音频');
+      
+      try {
+        // 调用SDK方法
+        WebUtils.callJs(engine, 'stopAudioDeviceRecordAndPlayTest', []);
+        
+        debugPrint('停止录制并开始播放测试音频成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('停止录制并播放测试失败: $e');
+        return AudioResult.failure('停止录制并播放测试失败: $e');
+      }
+    } catch (e) {
+      debugPrint('停止录制并播放测试过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+  
+  /// 停止音频设备播放测试
+  /// 
+  /// @return 测试结果 AudioResult
+  Future<AudioResult> stopAudioDevicePlayTest() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return AudioResult.failure('引擎未设置', AudioErrorCode.ENGINE_NOT_INITIALIZED);
+      }
+      
+      debugPrint('停止音频设备播放测试');
+      
+      try {
+        // 调用SDK方法
+        WebUtils.callJs(engine, 'stopAudioDevicePlayTest', []);
+        
+        debugPrint('音频设备播放测试停止成功');
+        return AudioResult.success();
+      } catch (e) {
+        debugPrint('停止音频设备播放测试失败: $e');
+        return AudioResult.failure('停止音频设备播放测试失败: $e');
+      }
+    } catch (e) {
+      debugPrint('停止音频设备播放测试过程发生未知错误: $e');
+      return AudioResult.failure(e.toString());
+    }
+  }
+
   // Getters
   bool get hasAudioInputPermission => _hasAudioInputPermission;
   bool get isCapturingAudio => _isCapturingAudio;
