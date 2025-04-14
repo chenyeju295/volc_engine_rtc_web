@@ -71,9 +71,6 @@ class RtcMessageHandler {
   /// 处理二进制消息
   void handleBinaryMessage(String userId, dynamic message) {
     try {
-      // 避免为每条消息都输出处理开始日志
-      // debugPrint('【消息处理器】开始处理二进制消息，用户ID: $userId');
-
       if (message == null) {
         debugPrint('【消息处理器】收到null消息，无法处理');
         return;

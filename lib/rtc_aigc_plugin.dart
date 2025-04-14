@@ -449,14 +449,7 @@ class RtcAigcPlugin {
         }
         return {'success': false, 'error': '未知返回类型'};
       } else {
-        final result = await _channel
-            .invokeMethod('startAudioCapture', {'deviceId': deviceId});
-        if (result is bool) {
-          return {'success': result};
-        } else if (result is Map<String, dynamic>) {
-          return result;
-        }
-        return {'success': false, 'error': '未知返回类型'};
+        return {'success': false, 'error': 'RTC服务未初始化'};
       }
     } catch (e) {
       debugPrint('Error starting audio capture: $e');
@@ -501,13 +494,7 @@ class RtcAigcPlugin {
           return await startAudioCapture();
         }
       } else {
-        final result = await _channel.invokeMethod('muteAudio', {'mute': mute});
-        if (result is bool) {
-          return {'success': result};
-        } else if (result is Map<String, dynamic>) {
-          return result;
-        }
-        return {'success': false, 'error': '未知返回类型'};
+        return {'success': false, 'error': '_rtcService is null'};
       }
     } catch (e) {
       debugPrint('Error muting audio: $e');
