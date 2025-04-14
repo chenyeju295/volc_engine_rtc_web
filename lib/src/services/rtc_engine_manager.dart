@@ -25,7 +25,6 @@ class RtcEngineManager {
 
   Future<bool> initialize() async {
     try {
-
       await _initializeRtcEngine();
       isInitialized = true;
       return true;
@@ -40,8 +39,6 @@ class RtcEngineManager {
     if (!WebUtils.isSdkLoaded()) {
       // Wait for SDK to load
       await WebUtils.waitForSdkLoaded();
-    } else {
-      debugPrint('【RTC引擎】RTC SDK已加载，跳过等待过程');
     }
 
     // Verify SDK availability
@@ -64,11 +61,8 @@ class RtcEngineManager {
         throw Exception('创建RTC引擎失败');
       }
 
-      debugPrint('【RTC引擎】RTC引擎创建成功');
-
       // 尝试添加AI降噪扩展（可选，如果失败不会影响主要功能）
       try {
-        debugPrint('【RTC引擎】尝试加载AI降噪扩展...');
         final rtcAiAnsExtensionClass =
             js_util.getProperty(js_util.globalThis, 'RTCAIAnsExtension');
         if (rtcAiAnsExtensionClass != null) {
@@ -84,8 +78,6 @@ class RtcEngineManager {
       } catch (e) {
         debugPrint('【RTC引擎】AI降噪扩展加载失败，但不影响主要功能: $e');
       }
-
-      debugPrint('【RTC引擎】RTC引擎初始化成功');
     } catch (e) {
       debugPrint('【RTC引擎】创建RTC引擎失败: $e');
       throw Exception('创建RTC引擎失败: $e');
@@ -102,8 +94,6 @@ class RtcEngineManager {
     }
 
     try {
-      debugPrint('【加入房间】正在加入RTC房间: ${roomId}');
-      
       // 启用音频属性报告
       js_util.callMethod(engine, 'enableAudioPropertiesReport', [
         js_util.jsify({'interval': 1000})
@@ -117,24 +107,23 @@ class RtcEngineManager {
         'call_scene': 'RTC-AIGC',
       }));
 
-      debugPrint('【加入房间】用户ID: $userId, 附加信息: $extraInfo');
-
       // 设置房间选项
-      final roomOptions = js_util.jsify({
+      final roomOptions = WebUtils.stringify(js_util.jsify({
         'isAutoPublish': true,
         'isAutoSubscribeAudio': true,
         'roomProfileType': 5, // RoomProfileType.chat
-      });
+      }));
 
       // 准备用户对象
       final userObject =
           js_util.jsify({'userId': userId, 'extraInfo': extraInfo});
 
+      debugPrint(
+          '【加入房间】准备加入房间:  房间ID: $roomId,  附加信息: $extraInfo, 房间选项: $roomOptions');
       // 调用joinRoom方法
       await js_util.promiseToFuture(js_util.callMethod(
           engine, 'joinRoom', [token, roomId, userObject, roomOptions]));
 
-      debugPrint('【加入房间】成功加入房间: ${roomId}');
       isInRoom = true;
 
       return true;
@@ -206,5 +195,4 @@ class RtcEngineManager {
       debugPrint('【销毁引擎】销毁引擎时出错: $e');
     }
   }
-
 }

@@ -95,7 +95,8 @@ class RtcAigcPlugin {
   static StreamSubscription? _stateSubscription;
 
   /// Initialize the plugin
-  static Future<bool> initialize({required AigcConfig config}) async {
+  static Future<bool> initialize(
+      {required String baseUrl, required AigcConfig config}) async {
     try {
       // Ensure we don't initialize twice
       if (_rtcService != null) {
@@ -128,6 +129,7 @@ class RtcAigcPlugin {
         deviceManager: deviceManager,
         eventManager: eventManager,
         messageHandler: messageHandler,
+        baseUrl: baseUrl,
       );
 
       // Explicitly initialize the RtcService
@@ -318,9 +320,9 @@ class RtcAigcPlugin {
     required String userId,
     required String token,
   }) async {
-    try { 
-        return await _rtcService!
-            .joinRoom(roomId: roomId, userId: userId, token: token);
+    try {
+      return await _rtcService!
+          .joinRoom(roomId: roomId, userId: userId, token: token);
     } catch (e, s) {
       debugPrint('Error joining room: $e ${s.toString()}');
       if (_rtcService?.onStateChange != null) {
@@ -392,8 +394,7 @@ class RtcAigcPlugin {
     } catch (e) {
       debugPrint('Error stopping conversation: $e');
       if (_rtcService?.onStateChange != null) {
-        _rtcService!.onStateChange!(
-            'error', 'Failed to stop conversation: $e');
+        _rtcService!.onStateChange!('error', 'Failed to stop conversation: $e');
       }
       return false;
     }
@@ -445,7 +446,8 @@ class RtcAigcPlugin {
   }
 
   /// 开始音频采集
-  static Future<Map<String, dynamic>> startAudioCapture({String? deviceId}) async {
+  static Future<Map<String, dynamic>> startAudioCapture(
+      {String? deviceId}) async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.startAudioCapture(deviceId);
@@ -534,7 +536,8 @@ class RtcAigcPlugin {
         }
         return {'success': false, 'error': '未知返回类型'};
       } else {
-        final result = await _channel.invokeMethod('setAudioCaptureVolume', {'volume': volume});
+        final result = await _channel
+            .invokeMethod('setAudioCaptureVolume', {'volume': volume});
         if (result is bool) {
           return {'success': result};
         } else if (result is Map<String, dynamic>) {
@@ -547,7 +550,7 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 切换音频设备
   static Future<Map<String, dynamic>> switchAudioDevice(String deviceId) async {
     try {
@@ -560,7 +563,8 @@ class RtcAigcPlugin {
         }
         return {'success': false, 'error': '未知返回类型'};
       } else {
-        final result = await _channel.invokeMethod('switchAudioDevice', {'deviceId': deviceId});
+        final result = await _channel
+            .invokeMethod('switchAudioDevice', {'deviceId': deviceId});
         if (result is bool) {
           return {'success': result};
         } else if (result is Map<String, dynamic>) {
@@ -575,9 +579,9 @@ class RtcAigcPlugin {
   }
 
   /// 启动音频播放设备测试
-  /// 
+  ///
   /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
-  /// 
+  ///
   /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
   /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
   /// @return 测试结果 Map<String, dynamic>
@@ -585,9 +589,9 @@ class RtcAigcPlugin {
       String filePath, int indicationInterval) async {
     try {
       if (_rtcService != null) {
-        final result = await _rtcService!.startAudioPlaybackDeviceTest(
-          filePath, indicationInterval);
-        
+        final result = await _rtcService!
+            .startAudioPlaybackDeviceTest(filePath, indicationInterval);
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -596,10 +600,9 @@ class RtcAigcPlugin {
         return {'success': true};
       } else {
         final result = await _channel.invokeMethod(
-          'startAudioPlaybackDeviceTest', 
-          {'filePath': filePath, 'indicationInterval': indicationInterval}
-        );
-        
+            'startAudioPlaybackDeviceTest',
+            {'filePath': filePath, 'indicationInterval': indicationInterval});
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -612,15 +615,15 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止音频播放设备测试
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   static Future<Map<String, dynamic>> stopAudioPlaybackDeviceTest() async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.stopAudioPlaybackDeviceTest();
-        
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -628,8 +631,9 @@ class RtcAigcPlugin {
         }
         return {'success': true};
       } else {
-        final result = await _channel.invokeMethod('stopAudioPlaybackDeviceTest');
-        
+        final result =
+            await _channel.invokeMethod('stopAudioPlaybackDeviceTest');
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -642,11 +646,11 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 开始音频采集设备和播放设备测试
-  /// 
+  ///
   /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
-  /// 
+  ///
   /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
   /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
   /// @return 测试结果 Map<String, dynamic>
@@ -656,10 +660,9 @@ class RtcAigcPlugin {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.startAudioDeviceRecordTest(
-          indicationInterval,
-          onAutoplayFailed: onAutoplayFailed
-        );
-        
+            indicationInterval,
+            onAutoplayFailed: onAutoplayFailed);
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -667,11 +670,9 @@ class RtcAigcPlugin {
         }
         return {'success': true};
       } else {
-        final result = await _channel.invokeMethod(
-          'startAudioDeviceRecordTest', 
-          {'indicationInterval': indicationInterval}
-        );
-        
+        final result = await _channel.invokeMethod('startAudioDeviceRecordTest',
+            {'indicationInterval': indicationInterval});
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -684,17 +685,17 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止采集本地音频，并开始播放采集到的声音
-  /// 
+  ///
   /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   static Future<Map<String, dynamic>> stopAudioDeviceRecordAndPlayTest() async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.stopAudioDeviceRecordAndPlayTest();
-        
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -702,8 +703,9 @@ class RtcAigcPlugin {
         }
         return {'success': true};
       } else {
-        final result = await _channel.invokeMethod('stopAudioDeviceRecordAndPlayTest');
-        
+        final result =
+            await _channel.invokeMethod('stopAudioDeviceRecordAndPlayTest');
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -716,15 +718,15 @@ class RtcAigcPlugin {
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止音频设备播放测试
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   static Future<Map<String, dynamic>> stopAudioDevicePlayTest() async {
     try {
       if (_rtcService != null) {
         final result = await _rtcService!.stopAudioDevicePlayTest();
-        
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -733,7 +735,7 @@ class RtcAigcPlugin {
         return {'success': true};
       } else {
         final result = await _channel.invokeMethod('stopAudioDevicePlayTest');
-        
+
         if (result is Map<String, dynamic>) {
           return result;
         } else if (result is bool) {
@@ -756,8 +758,7 @@ class RtcAigcPlugin {
         final result = await _channel.invokeMethod('getAudioInputDevices');
         if (result is List) {
           return List<Map<String, dynamic>>.from(
-            result.map((item) => Map<String, dynamic>.from(item))
-          );
+              result.map((item) => Map<String, dynamic>.from(item)));
         }
         return [];
       }
@@ -766,12 +767,12 @@ class RtcAigcPlugin {
       return [];
     }
   }
-  
+
   /// 刷新设备列表 - 手动调用以更新可用设备
-  /// 
+  ///
   /// 主动刷新当前可用的音频设备列表，解决重复设备问题
   /// 当设备列表发生变化时，会自动发送通知到deviceStateStream
-  /// 
+  ///
   /// @return 刷新后的音频输入设备列表
   static Future<List<Map<String, dynamic>>> refreshDevices() async {
     try {
@@ -781,8 +782,7 @@ class RtcAigcPlugin {
         final result = await _channel.invokeMethod('refreshDevices');
         if (result is List) {
           return List<Map<String, dynamic>>.from(
-            result.map((item) => Map<String, dynamic>.from(item))
-          );
+              result.map((item) => Map<String, dynamic>.from(item)));
         }
         return [];
       }
@@ -791,7 +791,7 @@ class RtcAigcPlugin {
       return [];
     }
   }
-  
+
   /// 获取音频输出设备列表
   static Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
     try {
@@ -801,8 +801,7 @@ class RtcAigcPlugin {
         final result = await _channel.invokeMethod('getAudioOutputDevices');
         if (result is List) {
           return List<Map<String, dynamic>>.from(
-            result.map((item) => Map<String, dynamic>.from(item))
-          );
+              result.map((item) => Map<String, dynamic>.from(item)));
         }
         return [];
       }

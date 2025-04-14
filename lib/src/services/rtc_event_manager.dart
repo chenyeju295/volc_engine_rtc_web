@@ -203,7 +203,6 @@ class RtcEventManager {
   /// 已加入的用户列表
   List<String> get joinedUsers => List.unmodifiable(_joinedUsers);
 
-
   /// 用于记录和处理RTC错误
   void _handleError(RtcError error) {
     // 记录错误
@@ -230,7 +229,7 @@ class RtcEventManager {
     // 初始化消息处理器
     if (messageHandler != null) {
       _messageHandler = messageHandler;
-      
+
       // 设置消息处理器的回调
       messageHandler.onSubtitle = (subtitle) {
         _subtitleController.add(subtitle);
@@ -248,7 +247,7 @@ class RtcEventManager {
       _messageHandler = RtcMessageHandler();
       debugPrint('RtcEventManager: 创建了新的消息处理器实例');
     }
-    
+
     // 配置事件映射表
     _setupEventMap();
   }
@@ -256,18 +255,15 @@ class RtcEventManager {
   /// 设置引擎并初始化事件监听
   void setEngine(dynamic rtcClient) {
     if (_engineSet) {
-      debugPrint('RtcEventManager: 引擎已设置，跳过');
       return;
     }
 
     _rtcClient = rtcClient;
     _engineSet = true;
-    debugPrint('RtcEventManager: 引擎设置成功');
 
     // 设置消息处理器的引擎
     try {
       _messageHandler.setEngine(rtcClient);
-      debugPrint('RtcEventManager: 成功设置消息处理器的引擎');
     } catch (e) {
       debugPrint('RtcEventManager: 设置消息处理器的引擎失败: $e');
       // 继续执行，因为可能消息处理器已在其他地方初始化
@@ -308,7 +304,6 @@ class RtcEventManager {
     };
   }
 
-
   /// 获取VERTC事件常量 - 优化版
   void _getEvents() {
     try {
@@ -330,7 +325,6 @@ class RtcEventManager {
 
           for (var eventName in commonEvents) {
             if (_events.hasProperty(eventName)) {
-              debugPrint('预缓存事件常量: $eventName');
               // 在此处可以存储事件引用，但当前实现中我们每次动态获取
             }
           }
@@ -405,7 +399,6 @@ class RtcEventManager {
 
       // 注册事件
       js_util.callMethod(_rtcClient, 'on', [eventRef, wrappedCallback]);
-      debugPrint('已注册 $eventName 事件处理器');
     } catch (e) {
       debugPrint('注册 $eventName 事件处理器出错: $e');
     }
@@ -635,7 +628,7 @@ class RtcEventManager {
           debugPrint('AI用户 $userId 开始说话');
           _isAITalking = true;
           _audioStatusController.add(true); // 通知UI AI开始说话
-        } else if (userId.contains('local_') || userId == 'local') { 
+        } else if (userId.contains('local_') || userId == 'local') {
           // 本地用户
           _isAudioCapturing = true;
           _audioStatusController.add(true);
@@ -670,7 +663,7 @@ class RtcEventManager {
           debugPrint('AI用户 $userId 停止说话');
           _isAITalking = false;
           _audioStatusController.add(false); // 通知UI AI停止说话
-        } else if (userId.contains('local_') || userId == 'local') { 
+        } else if (userId.contains('local_') || userId == 'local') {
           // 本地用户
           _isAudioCapturing = false;
           _audioStatusController.add(false);
@@ -694,9 +687,6 @@ class RtcEventManager {
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       final message = js_util.getProperty(event, 'message');
-
-      debugPrint(
-          '【事件系统】收到二进制消息，用户ID: $userId，消息长度: ${message != null ? "有数据" : "无数据"}');
 
       if (message != null) {
         // 将消息传递给消息处理器
@@ -785,11 +775,16 @@ class RtcEventManager {
   }
 
   void _handleSubtitleMessageReceived(dynamic event) {
-    debugPrint('事件: onSubtitleMessageReceived');
+    // 只在字幕为最终状态时输出日志
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       final text = js_util.getProperty(event, 'text') ?? '';
       final isFinal = js_util.getProperty(event, 'isFinal') ?? false;
+
+      // 只有最终字幕才输出日志
+      if (isFinal && text.isNotEmpty) {
+        debugPrint('【字幕】RTC最终字幕: $text');
+      }
 
       // 发送字幕文本
       _subtitleController.add(text);

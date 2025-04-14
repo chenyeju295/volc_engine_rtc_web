@@ -54,13 +54,14 @@ class SubtitleView extends StatelessWidget {
           width: effectiveStyle.borderWidth,
         ),
         boxShadow: [
-          BoxShadow(
-            color: (isFinal 
-                ? effectiveStyle.finalBorderColor 
-                : effectiveStyle.progressBorderColor).withOpacity(0.2),
-            blurRadius: effectiveStyle.shadowBlurRadius,
-            offset: effectiveStyle.shadowOffset,
-          )
+          if (effectiveStyle.enableShadow)
+            BoxShadow(
+              color: (isFinal 
+                  ? effectiveStyle.finalBorderColor 
+                  : effectiveStyle.progressBorderColor).withOpacity(0.2),
+              blurRadius: effectiveStyle.shadowBlurRadius,
+              offset: effectiveStyle.shadowOffset,
+            )
         ],
       ),
       child: Column(
@@ -214,6 +215,7 @@ class SubtitleViewStyle {
   final double borderWidth;
   final double shadowBlurRadius;
   final Offset shadowOffset;
+  final bool enableShadow;
   
   // 头像相关
   final double avatarRadius;
@@ -267,10 +269,11 @@ class SubtitleViewStyle {
     // 布局
     this.margin = const EdgeInsets.only(top: 16, bottom: 8),
     this.padding = const EdgeInsets.all(16),
-    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
-    this.borderWidth = 1.5,
-    this.shadowBlurRadius = 8.0,
-    this.shadowOffset = const Offset(0, 2),
+    this.borderRadius = const BorderRadius.all(Radius.circular(8)),
+    this.borderWidth = 1.0,
+    this.shadowBlurRadius = 4.0,
+    this.shadowOffset = const Offset(0, 1),
+    this.enableShadow = false,
     
     // 头像
     this.avatarRadius = 14.0,
@@ -295,14 +298,14 @@ class SubtitleViewStyle {
     this.thinkingDotSpacing = 4.0,
     
     // 进行中状态颜色
-    this.progressBackgroundColor = const Color(0xFFE3F2FD),
+    this.progressBackgroundColor = const Color(0xFFF5F5F5),
     this.progressBorderColor = Colors.blue,
-    this.progressAvatarColor = Colors.blue,
+    this.progressAvatarColor = Colors.green,
     this.progressTextColor = Colors.blue,
     this.progressContentTextColor = const Color(0xFF757575),
     
     // 最终状态颜色
-    this.finalBackgroundColor = const Color(0xFFE8F5E9),
+    this.finalBackgroundColor = Colors.white,
     this.finalBorderColor = Colors.green,
     this.finalAvatarColor = Colors.green,
     this.finalTextColor = Colors.green,
@@ -312,7 +315,7 @@ class SubtitleViewStyle {
     this.interruptColor = Colors.red,
     
     // 文本
-    this.progressStatusText = "正在说话...",
+    this.progressStatusText = "输入中...",
     this.finalStatusText = "AI 回复",
   });
   

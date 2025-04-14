@@ -24,6 +24,12 @@ enum ActionType {
   const ActionType(this.value);
 }
 
+enum COMMAND {
+  interrupt, // 打断指令
+  ExternalTextToSpeech, // 发送外部文本驱动TTS
+  ExternalTextToLLM, // 发送外部文本驱动LLM
+}
+
 /// AIGC 客户端 - 统一管理与火山引擎API的交互
 class AigcClient {
   /// 服务器基础URL
@@ -114,7 +120,6 @@ class AigcClient {
 
       // 发送请求
       debugPrint('[AigcClient] 发送请求: $uri');
-      debugPrint('[AigcClient] 请求参数: ${jsonEncode(params)}');
 
       final response = await _httpClient.post(
         uri,
@@ -136,7 +141,8 @@ class AigcClient {
         debugPrint('[AigcClient] 解析响应JSON出错: $parseError');
         debugPrint('[AigcClient] 原始响应内容: ${response.body}');
         _setState(AigcClientState.error);
-        throw Exception('解析响应JSON出错: $parseError，原始内容: ${response.body.substring(0, min(100, response.body.length))}...');
+        throw Exception(
+            '解析响应JSON出错: $parseError，原始内容: ${response.body.substring(0, min(100, response.body.length))}...');
       }
     } catch (e) {
       debugPrint('[AigcClient] 请求错误: $e');
@@ -164,7 +170,7 @@ class AigcClient {
       // 处理StartVoiceChat特定响应格式
       if (response.containsKey('Result')) {
         String result = response['Result'];
-        
+
         // 任务已经开始的消息是正常的
         if (result.contains('The task has been started')) {
           debugPrint('[AigcClient] 任务已经启动，这是正常的响应');
@@ -173,7 +179,7 @@ class AigcClient {
           return response;
         }
       }
-      
+
       // 有Data字段的情况
       if (response.containsKey('Data')) {
         return response;
@@ -186,7 +192,7 @@ class AigcClient {
         return response;
       }
     }
-    
+
     // 未知响应格式时的处理（不修改状态，只记录警告）
     // 注：移除直接抛出异常，以更宽容地处理各种响应格式
     debugPrint('[AigcClient] 警告：未知响应格式，但将继续处理: ${jsonEncode(response)}');
@@ -239,20 +245,12 @@ class AigcClient {
       // 更新状态为等待响应
       _setState(AigcClientState.responding);
 
-      // {
-      //     "AppId": "661e****543cf", // RTC 应用 AppId
-      //     "RoomId": "Room1", // 会话房间 ID
-      //     "TaskId": "task1", // 会话任务 ID
-      //     "Command": "ExternalTextToSpeech", //控制命令，此处填入 ExternalTextToSpeech
-      //     "Message": "你刚才的故事讲的真棒，能再讲一个吗。" // 自定义文本内容，长度不超过 200 个字符。
-      //     "InterruptMode": 1 //文本内容播报的优先级。
-      // }
       // 发送更新命令给AI
       final params = {
         'AppId': config.appId,
         'RoomId': config.roomId,
         'TaskId': config.taskId,
-        'Command': 'EXTERNAL_TEXT_TO_SPEECH',
+        'Command': COMMAND.interrupt.toString(),
         'Message': text,
         "InterruptMode": 1
       };
@@ -331,16 +329,16 @@ class AigcClient {
       _isConnected = true;
       // 使用与Web Demo一致的参数结构
       final Map<String, dynamic> params = config.toJson();
-      params['Config']['LLMConfig']['BotId'] = "BotId12";
+      debugPrint('[AigcClient] 开始语音对话: $params');
       final result = await _post(
         action: ActionType.startVoiceChat,
         name: 'start',
         params: params,
       );
-      
+
       // 如果成功启动，则更新状态为就绪
       _setState(AigcClientState.ready);
-      
+
       return result;
     } catch (e) {
       _isConnected = false;

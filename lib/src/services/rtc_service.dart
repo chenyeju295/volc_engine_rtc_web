@@ -212,20 +212,24 @@ class RtcService {
   /// 是否已销毁
   bool _isDisposed = false;
 
+  ///
+  final String _baseUrl;
+
   /// 构造函数 - 使用依赖注入
   RtcService({
     required AigcConfig config,
+    required String baseUrl,
     required RtcEngineManager engineManager,
     required RtcDeviceManager deviceManager,
     required RtcEventManager eventManager,
     required RtcMessageHandler messageHandler,
   })  : _config = config,
+        _baseUrl = baseUrl,
         _engineManager = engineManager,
         _deviceManager = deviceManager,
         _messageHandler = messageHandler,
         _eventManager = eventManager {
     // 构造函数内不执行初始化操作，所有初始化统一在initialize()方法中完成
-    debugPrint('【RTC服务】构造完成，等待initialize()方法调用');
   }
 
   /// 获取状态流
@@ -298,12 +302,10 @@ class RtcService {
 
   /// 设置消息处理器回调
   void _setupMessageHandlerCallbacks() {
-    debugPrint('【RTC服务】设置消息处理器回调...');
-
     // 设置字幕回调
     _messageHandler.onSubtitle = (subtitle) {
       _subtitleController.add(subtitle);
-        };
+    };
 
     // 设置函数调用回调
     _messageHandler.onFunctionCall = (functionCall) {
@@ -323,7 +325,7 @@ class RtcService {
       if (_functionCallCallback != null) {
         _functionCallCallback!(functionCall);
       }
-        };
+    };
 
     // 设置状态回调
     _messageHandler.onState = (state) {
@@ -346,9 +348,7 @@ class RtcService {
           _setState(RtcState.inRoom);
           break;
       }
-        };
-
-    debugPrint('【RTC服务】消息处理器回调设置完成');
+    };
   }
 
   /// 设置事件流转发
@@ -396,7 +396,7 @@ class RtcService {
         }
 
         _connectionStateController.add(connectionState);
-            }, onError: (e) => debugPrint('【RTC服务】连接状态流错误: $e'));
+      }, onError: (e) => debugPrint('【RTC服务】连接状态流错误: $e'));
 
       // 转发网络质量事件
       _eventManager.networkQualityStream.listen((quality) {
@@ -427,7 +427,7 @@ class RtcService {
 
       _eventManager.remoteAudioPropertiesStream.listen((data) {
         _remoteAudioPropertiesController.add(data);
-            }, onError: (e) => debugPrint('【RTC服务】远程音频属性流错误: $e'));
+      }, onError: (e) => debugPrint('【RTC服务】远程音频属性流错误: $e'));
 
       // 转发用户流事件
       _eventManager.userPublishStreamStream.listen((data) {
@@ -506,7 +506,6 @@ class RtcService {
       // AIGC客户端消息监听
       if (_aigcClient != null) {
         _aigcClient!.messageStream.listen((message) {
-          debugPrint('【RTC服务】收到AIGC消息: ${message.text}');
           _addMessage(message);
 
           if (_messageCallback != null) {
@@ -515,8 +514,6 @@ class RtcService {
         }, onError: (e) => debugPrint('【RTC服务】AIGC消息流错误: $e'));
 
         _aigcClient!.stateStream.listen((state) {
-          debugPrint('【RTC服务】AIGC状态变更: $state');
-
           if (state == AigcClientState.responding) {
             _setState(RtcState.waitingResponse);
           } else if (state == AigcClientState.ready &&
@@ -534,8 +531,6 @@ class RtcService {
           }
         }, onError: (e) => debugPrint('【RTC服务】AIGC状态流错误: $e'));
       }
-
-      debugPrint('【RTC服务】事件流设置完成');
     } catch (e, stackTrace) {
       debugPrint('【RTC服务】设置事件流时出错: $e');
       debugPrint('【RTC服务】错误堆栈: $stackTrace');
@@ -563,8 +558,6 @@ class RtcService {
           final stateString = _state.toString().split('.').last;
           onStateChange!(stateString, null);
         }
-
-        debugPrint('【RTC服务】状态变更: $_state');
       }
     } catch (e) {
       debugPrint('【RTC服务】设置状态时出错: $e');
@@ -680,18 +673,13 @@ class RtcService {
         return true;
       }
 
-      debugPrint('【RTC服务】开始初始化...');
-
       if (!WebUtils.isSdkLoaded()) {
         try {
           await WebUtils.waitForSdkLoaded();
-          debugPrint('【RTC服务】SDK加载完成，继续初始化流程');
         } catch (e) {
           debugPrint('【RTC服务】SDK加载失败: $e');
           return false;
         }
-      } else {
-        debugPrint('【RTC服务】SDK已加载，继续初始化流程');
       }
 
       final engineSuccess = await _engineManager.initialize();
@@ -699,7 +687,6 @@ class RtcService {
         debugPrint('【RTC服务】引擎初始化失败');
         return false;
       }
-      debugPrint('【RTC服务】引擎管理器初始化成功');
 
       // 2. 获取RTC客户端实例
       final rtcClient = _engineManager.getRtcClient();
@@ -707,16 +694,12 @@ class RtcService {
         debugPrint('【RTC服务】无法获取RTC客户端实例');
         return false;
       }
-      debugPrint('【RTC服务】获取RTC客户端实例成功');
 
       // 3. 安全设置内部组件的引擎引用
       try {
         // 确保组件初始化的正确顺序：先消息处理器，再事件管理器
-        debugPrint('【RTC服务】设置消息处理器引擎...');
         _messageHandler.setEngine(rtcClient);
-        debugPrint('【RTC服务】设置事件管理器引擎...');
         _eventManager.setEngine(rtcClient);
-
       } catch (e, stackTrace) {
         debugPrint('【RTC服务】设置内部组件引擎失败: $e');
         debugPrint('【RTC服务】错误堆栈: $stackTrace');
@@ -725,11 +708,7 @@ class RtcService {
 
       // 4. 初始化AIGC客户端
       try {
-        debugPrint('【RTC服务】初始化AIGC客户端...');
-        _aigcClient = AigcClient(
-            baseUrl: _config.serverUrl ?? 'http://localhost:3001',
-            config: _config);
-        debugPrint('【RTC服务】AIGC客户端初始化成功');
+        _aigcClient = AigcClient(baseUrl: _baseUrl, config: _config);
       } catch (e) {
         debugPrint('【RTC服务】AIGC客户端初始化失败: $e，但继续初始化其他组件');
         // 不返回失败，因为AIGC客户端不是必要组件
@@ -737,23 +716,15 @@ class RtcService {
 
       // 5. 设置各组件回调和事件监听
       try {
-        // 设置消息处理器回调
-        debugPrint('【RTC服务】设置消息处理器回调...');
         _setupMessageHandlerCallbacks();
-
-        // 设置事件监听
-        debugPrint('【RTC服务】设置事件流监听...');
         _setupEventStreams();
       } catch (e) {
         debugPrint('【RTC服务】设置回调和事件监听失败: $e');
         return false;
       }
-
       // 6. 标记为已初始化
       _isInitialized = true;
       _setState(RtcState.initialized);
-
-      debugPrint('【RTC服务】初始化完成');
       return true;
     } catch (e) {
       debugPrint('【RTC服务】初始化失败: $e');
@@ -774,8 +745,6 @@ class RtcService {
         debugPrint('【RTC服务】已在房间中');
         return true;
       }
-
-      debugPrint('【RTC服务】开始加入房间: $roomId, $userId');
 
       // 加入RTC房间
       final joinSuccess = await _engineManager.joinRoom(
@@ -856,8 +825,6 @@ class RtcService {
         debugPrint('【RTC服务】已经在对话中');
         return true;
       }
-
-      debugPrint('【RTC服务】开始对话...');
 
       // 确保音频采集已启动
       if (!_deviceManager.isCapturingAudio) {
@@ -1001,7 +968,7 @@ class RtcService {
 
       // 委托给设备管理器处理
       final result = await _deviceManager.startAudioCapture(deviceId: deviceId);
-      
+
       // 如果成功启动采集，并且在房间中，尝试发布流
       if (result.success && _isInRoom) {
         debugPrint('【RTC服务】尝试发布流');
@@ -1012,9 +979,10 @@ class RtcService {
           if (rtcClient != null) {
             // 获取MediaType.AUDIO常量
             dynamic mediaType = _getMediaTypeAudio();
-            
+
             // 发布音频流
-            final publishPromise = js_util.callMethod(rtcClient, 'publishStream', [mediaType]);
+            final publishPromise =
+                js_util.callMethod(rtcClient, 'publishStream', [mediaType]);
             await js_util.promiseToFuture(publishPromise);
             debugPrint('【RTC服务】音频流发布成功');
           }
@@ -1023,7 +991,7 @@ class RtcService {
           // 不影响整体返回结果，因为采集已启动
         }
       }
-      
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】音频采集启动过程发生未知错误: $e');
@@ -1034,11 +1002,11 @@ class RtcService {
   /// 停止音频采集
   /// 立即关闭内部音频采集。
   /// 发布流后调用该方法，房间内的其他用户会收到 onUserStopAudioCapture 的回调。
-  /// 
+  ///
   /// 注意：
   /// - 调用 startAudioCapture 可以开启内部音频采集。
   /// - 如果不调用本方法停止内部音频采集，则只有当销毁引擎实例时，内部音频采集才会停止。
-  /// 
+  ///
   /// @return 如果成功，返回true；如果失败，返回包含错误信息的Map
   Future<dynamic> stopAudioCapture() async {
     try {
@@ -1056,9 +1024,10 @@ class RtcService {
           if (rtcClient != null) {
             // 获取MediaType.AUDIO常量
             dynamic mediaType = _getMediaTypeAudio();
-            
+
             // 取消发布音频流
-            final unpublishPromise = js_util.callMethod(rtcClient, 'unpublishStream', [mediaType]);
+            final unpublishPromise =
+                js_util.callMethod(rtcClient, 'unpublishStream', [mediaType]);
             await js_util.promiseToFuture(unpublishPromise);
             debugPrint('【RTC服务】取消发布音频流成功');
           }
@@ -1085,7 +1054,7 @@ class RtcService {
       }
 
       debugPrint('【RTC服务】设置音频采集音量: $volume');
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.setAudioCaptureVolume(volume);
       return result.toMap();
@@ -1103,7 +1072,7 @@ class RtcService {
       }
 
       debugPrint('【RTC服务】切换音频设备: $deviceId');
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.switchAudioDevice(deviceId);
       return result.toMap();
@@ -1132,7 +1101,7 @@ class RtcService {
   Future<List<Map<String, dynamic>>> getAudioInputDevices() async {
     try {
       if (!_checkInitialized()) return [];
-      
+
       // 委托给设备管理器处理
       return await _deviceManager.getAudioInputDevices();
     } catch (e) {
@@ -1142,15 +1111,15 @@ class RtcService {
   }
 
   /// 刷新设备列表
-  /// 
+  ///
   /// 手动刷新当前可用的音频设备列表，解决重复设备问题
   /// 适用于需要主动更新设备列表的场景
-  /// 
+  ///
   /// @return 刷新后的音频输入设备列表
   Future<List<Map<String, dynamic>>> refreshDevices() async {
     try {
       if (!_checkInitialized()) return [];
-      
+
       // 委托给设备管理器处理
       return await _deviceManager.refreshDevices();
     } catch (e) {
@@ -1163,7 +1132,7 @@ class RtcService {
   Future<List<Map<String, dynamic>>> getAudioOutputDevices() async {
     try {
       if (!_checkInitialized()) return [];
-      
+
       // 委托给设备管理器处理
       return await _deviceManager.getAudioOutputDevices();
     } catch (e) {
@@ -1199,9 +1168,9 @@ class RtcService {
   }
 
   /// 启动音频播放设备测试
-  /// 
+  ///
   /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
-  /// 
+  ///
   /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
   /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
   /// @return 测试结果 Map<String, dynamic>
@@ -1211,41 +1180,41 @@ class RtcService {
       if (!_checkInitialized()) {
         return {'success': false, 'error': '服务未初始化'};
       }
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.startAudioPlaybackDeviceTest(
-        filePath, indicationInterval);
-      
+          filePath, indicationInterval);
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】启动音频播放设备测试时发生错误: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止音频播放设备测试
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   Future<Map<String, dynamic>> stopAudioPlaybackDeviceTest() async {
     try {
       if (!_checkInitialized()) {
         return {'success': false, 'error': '服务未初始化'};
       }
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.stopAudioPlaybackDeviceTest();
-      
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】停止音频播放设备测试时发生错误: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 开始音频采集设备和播放设备测试
-  /// 
+  ///
   /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
-  /// 
+  ///
   /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
   /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
   /// @return 测试结果 Map<String, dynamic>
@@ -1256,53 +1225,52 @@ class RtcService {
       if (!_checkInitialized()) {
         return {'success': false, 'error': '服务未初始化'};
       }
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.startAudioDeviceRecordTest(
-        indicationInterval,
-        onAutoplayFailed: onAutoplayFailed
-      );
-      
+          indicationInterval,
+          onAutoplayFailed: onAutoplayFailed);
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】开始音频设备录制测试时发生错误: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止采集本地音频，并开始播放采集到的声音
-  /// 
+  ///
   /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   Future<Map<String, dynamic>> stopAudioDeviceRecordAndPlayTest() async {
     try {
       if (!_checkInitialized()) {
         return {'success': false, 'error': '服务未初始化'};
       }
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.stopAudioDeviceRecordAndPlayTest();
-      
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】停止录制并播放测试时发生错误: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
-  
+
   /// 停止音频设备播放测试
-  /// 
+  ///
   /// @return 测试结果 Map<String, dynamic>
   Future<Map<String, dynamic>> stopAudioDevicePlayTest() async {
     try {
       if (!_checkInitialized()) {
         return {'success': false, 'error': '服务未初始化'};
       }
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.stopAudioDevicePlayTest();
-      
+
       return result.toMap();
     } catch (e) {
       debugPrint('【RTC服务】停止音频设备播放测试时发生错误: $e');
@@ -1387,21 +1355,21 @@ class RtcService {
         debugPrint('【RTC服务】无法获取VERTC全局对象');
         return 0; // 默认值
       }
-      
+
       // 获取MediaType枚举
       final mediaType = js_util.getProperty(vertc, 'MediaType');
       if (mediaType == null) {
         debugPrint('【RTC服务】无法获取MediaType枚举');
         return 0; // 默认值
       }
-      
+
       // 获取AUDIO常量
       final audioType = js_util.getProperty(mediaType, 'AUDIO');
       if (audioType == null) {
         debugPrint('【RTC服务】无法获取MediaType.AUDIO常量');
         return 0; // 默认值
       }
-      
+
       return audioType;
     } catch (e) {
       debugPrint('【RTC服务】获取MediaType.AUDIO常量失败: $e');

@@ -66,7 +66,6 @@ class RtcMessageHandler {
   /// 设置引擎
   void setEngine(dynamic rtcClient) {
     _rtcClient = rtcClient;
-    debugPrint('RtcMessageHandler: 设置引擎完成');
   }
 
   /// 处理二进制消息
@@ -96,16 +95,9 @@ class RtcMessageHandler {
         isSubtitle = magicString == 'subv';
       }
 
-      // 只为非字幕消息输出处理日志
-      if (!isSubtitle) {
-        debugPrint('【消息处理器】开始处理二进制消息，用户ID: $userId');
-        debugPrint('【消息处理器】消息长度: ${bytes.length} 字节');
-        debugPrint('【消息处理器】消息头部标识: $magicString');
-      }
-
       // 尝试多种方式解析消息
       Map<String, dynamic>? parsedData;
-      
+
       // 1. 首先尝试作为TLV消息解析
       final parsedTlvMessage = RtcMessageUtils.parseTlvMessage(bytes);
       if (parsedTlvMessage != null) {
@@ -116,45 +108,41 @@ class RtcMessageHandler {
           if (subtitleData is List && subtitleData.isNotEmpty) {
             var firstItem = subtitleData.first;
             if (firstItem is Map && firstItem.containsKey('definite')) {
-              isDefiniteSubtitle = firstItem['definite'] == true && firstItem['paragraph'] == true;
+              isDefiniteSubtitle = firstItem['definite'] == true &&
+                  firstItem['paragraph'] == true;
             }
           }
         }
 
-        if (!isSubtitle || isDefiniteSubtitle) {
-          debugPrint('【消息处理器】TLV消息解析成功，类型: ${parsedTlvMessage["type"]}');
-        }
         parsedData = parsedTlvMessage;
-      } 
+      }
       // 2. 如果TLV解析失败，尝试直接作为字符串处理
       else {
         // 通过预检查判断是否可能是已知格式
-        final bool mightBeJson = magicString == "{\"st" || 
-                                  magicString == "conv" || 
-                                  magicString == "subv" || 
-                                  magicString == "func" || 
-                                  bytes.indexOf(123) >= 0; // 123是'{'的ASCII
-        
+        final bool mightBeJson = magicString == "{\"st" ||
+            magicString == "conv" ||
+            magicString == "subv" ||
+            magicString == "func" ||
+            bytes.indexOf(123) >= 0; // 123是'{'的ASCII
+
         if (mightBeJson) {
-          // 只为非字幕消息输出尝试处理日志
-          if (!isSubtitle) {
-            debugPrint('【消息处理器】尝试作为JSON字符串处理');
-          }
-          
           final jsonString = WebUtils.binaryToString(message);
           if (jsonString.isNotEmpty) {
             // 只为非字幕消息输出预览日志
             if (!isSubtitle) {
-              final int previewLength = jsonString.length > 100 ? 100 : jsonString.length;
-              debugPrint('【消息处理器】字符串预览: ${jsonString.substring(0, previewLength)}...');
+              final int previewLength =
+                  jsonString.length > 100 ? 100 : jsonString.length;
+              debugPrint(
+                  '【消息处理器】字符串预览: ${jsonString.substring(0, previewLength)}...');
             }
-            
+
             // 如果字符串包含JSON对象的起始和结束标记，尝试提取
             if (jsonString.contains('{') && jsonString.contains('}')) {
               final int jsonStart = jsonString.indexOf('{');
               final int jsonEnd = jsonString.lastIndexOf('}') + 1;
               if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                final String jsonPart = jsonString.substring(jsonStart, jsonEnd);
+                final String jsonPart =
+                    jsonString.substring(jsonStart, jsonEnd);
                 try {
                   parsedData = RtcMessageUtils.safeParseJson(jsonPart);
                   if (parsedData != null && !isSubtitle) {
@@ -168,7 +156,7 @@ class RtcMessageHandler {
                 }
               }
             }
-            
+
             // 如果上面的提取失败，尝试直接解析整个字符串
             if (parsedData == null) {
               parsedData = RtcMessageUtils.safeParseJson(jsonString);
@@ -192,10 +180,15 @@ class RtcMessageHandler {
             // 创建一个简单的状态消息
             final Map<String, dynamic> stateMessage = {
               'type': 'conv',
-              'status': rawString.contains("THINKING") ? "THINKING" :
-                      rawString.contains("SPEAKING") ? "SPEAKING" : 
-                      rawString.contains("FINISHED") ? "FINISHED" : 
-                      rawString.contains("INTERRUPTED") ? "INTERRUPTED" : "UNKNOWN",
+              'status': rawString.contains("THINKING")
+                  ? "THINKING"
+                  : rawString.contains("SPEAKING")
+                      ? "SPEAKING"
+                      : rawString.contains("FINISHED")
+                          ? "FINISHED"
+                          : rawString.contains("INTERRUPTED")
+                              ? "INTERRUPTED"
+                              : "UNKNOWN",
               'timestamp': DateTime.now().millisecondsSinceEpoch
             };
             _processTextOrJson(stateMessage);
@@ -218,13 +211,14 @@ class RtcMessageHandler {
       // 只对非字幕消息或最终字幕(definite=true)进行日志记录
       bool isSubtitle = type == 'subv';
       bool isDefiniteSubtitle = false;
-      
+
       if (isSubtitle && data.containsKey('data')) {
         var subtitleData = data['data'];
         if (subtitleData is List && subtitleData.isNotEmpty) {
           var firstItem = subtitleData.first;
           if (firstItem is Map && firstItem.containsKey('definite')) {
-            isDefiniteSubtitle = firstItem['definite'] == true && firstItem['paragraph'] == true;
+            isDefiniteSubtitle =
+                firstItem['definite'] == true && firstItem['paragraph'] == true;
           }
         }
       }
@@ -291,7 +285,7 @@ class RtcMessageHandler {
       // 检查是否为最终字幕
       bool isDefiniteSubtitle = false;
       String subtitleText = "";
-      
+
       // 解析字幕数据
       if (data.containsKey('data')) {
         var subtitleData = data['data'];
@@ -299,7 +293,8 @@ class RtcMessageHandler {
           var firstItem = subtitleData.first;
           if (firstItem is Map) {
             if (firstItem.containsKey('definite')) {
-              isDefiniteSubtitle = firstItem['definite'] == true && firstItem['paragraph'] == true;
+              isDefiniteSubtitle = firstItem['definite'] == true &&
+                  firstItem['paragraph'] == true;
             }
             if (firstItem.containsKey('text')) {
               subtitleText = firstItem['text'] ?? '';
@@ -307,10 +302,10 @@ class RtcMessageHandler {
           }
         }
       }
-      
-      // 只有最终字幕才输出日志
-      if (isDefiniteSubtitle) {
-        debugPrint('【消息处理器】处理最终字幕: $subtitleText');
+
+      // 只有最终字幕才输出日志，简化输出内容
+      if (isDefiniteSubtitle && subtitleText.isNotEmpty) {
+        debugPrint('【字幕】最终字幕: $subtitleText');
       }
 
       // 提取字幕内容 - 这部分保持不变，正常处理所有字幕
@@ -318,6 +313,7 @@ class RtcMessageHandler {
       if (textData != null) {
         final subtitle = {
           'text': textData,
+          'isFinal': isDefiniteSubtitle, // 确保isFinal标记传递正确
           'timestamp': DateTime.now().millisecondsSinceEpoch,
         };
 
@@ -417,20 +413,22 @@ class RtcMessageHandler {
       // 如果传入的是字符串，创建正确的TLV消息格式
       dynamic msgToSend;
       if (message is String) {
-        debugPrint('【RtcMessageHandler】消息类型: 字符串，内容预览: ${message.length > 50 ? message.substring(0, 50) + "..." : message}');
-        
+        debugPrint(
+            '【RtcMessageHandler】消息类型: 字符串，内容预览: ${message.length > 50 ? message.substring(0, 50) + "..." : message}');
+
         // 创建命令格式消息
         var commandData = {
           "Command": "ExternalTextToLLM",
           "InterruptMode": 0,
           "Message": message
         };
-        
+
         // 转换为TLV格式
         msgToSend = RtcMessageUtils.createTlvMessage(commandData);
         debugPrint('【RtcMessageHandler】已创建TLV消息, 类型: ctrl');
       } else if (message is Map<String, dynamic>) {
-        debugPrint('【RtcMessageHandler】消息类型: Map, 键: ${message.keys.join(", ")}');
+        debugPrint(
+            '【RtcMessageHandler】消息类型: Map, 键: ${message.keys.join(", ")}');
         msgToSend = RtcMessageUtils.createTlvMessage(message);
         debugPrint('【RtcMessageHandler】已创建TLV消息');
       } else {
@@ -438,7 +436,7 @@ class RtcMessageHandler {
         msgToSend = message;
         debugPrint('【RtcMessageHandler】使用原始消息数据');
       }
-      
+
       // 确保消息转换成功
       if (msgToSend == null) {
         debugPrint('【RtcMessageHandler】错误: 消息转换失败');
@@ -449,7 +447,7 @@ class RtcMessageHandler {
       debugPrint('【RtcMessageHandler】调用RTC引擎发送消息...');
       final result = await WebUtils.callMethodAsync(
           _rtcClient, 'sendUserBinaryMessage', [userId, msgToSend]);
-      
+
       // 检查结果
       if (result == 0) {
         debugPrint('【RtcMessageHandler】消息发送成功');

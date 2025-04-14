@@ -52,6 +52,13 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   bool _isAiAudioCaptureStarted = false;
   bool _isAiPublished = false;
 
+  // 新增: 当前正在处理的AI消息ID
+  String? _currentAiMessageId;
+  // 新增: 是否有临时字幕显示
+  bool _hasPendingSubtitle = false;
+  // 新增: 临时字幕消息ID集合
+  Set<String> _pendingSubtitleIds = {};
+
   // 控制器
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -73,10 +80,18 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   late RtcAigcPlugin _rtcEngine;
   bool _isAudioTestRunning = false;
 
+  // 新增: 调试开关
+  bool _debugMode = false;
+
+  // 新增: 字幕回调计数器，用于诊断
+  int _subtitleCallbackCount = 0;
+
+  // 新增: 最后接收的字幕时间戳
+  int _lastSubtitleTimestamp = 0;
+
   @override
   void initState() {
     super.initState();
-
     _initialize();
   }
 
@@ -109,72 +124,74 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       _status = '正在初始化...';
     });
     try {
-      // 创建 AIGC 配置
+      //{
+      //           "AppId": "67f3871435d851017835d866",
+      //           "RoomId": "room1",
+      //           "TaskId": "user1",
+      //           "AgentConfig": {
+      //             "TargetUserId": ["user1"],
+      //             "WelcomeMessage": "你好，我是火山引擎 RTC 语音助手，有什么需要帮忙的吗？",
+      //             "UserId": "ChatBot01"
+      //           },
+      //           "Config": {
+      //             "LLMConfig": {
+      //               "Mode": "ArkV3",
+      //               "EndPointId": "ep-20250401160533-rr59m",
+      //               "VisionConfig": {"Enable": false}
+      //             },
+      //             "ASRConfig": {
+      //               "Provider": "volcano",
+      //               "ProviderParams": {
+      //                 "Mode": "smallmodel",
+      //                 "AppId": "4799544484",
+      //                 "Cluster": "volcengine_streaming_common"
+      //               }
+      //             },
+      //             "TTSConfig": {
+      //               "Provider": "volcano",
+      //               "ProviderParams": {
+      //                 "app": {"appid": "4799544484", "cluster": "volcano_tts"},
+      //                 "audio": {"voice_type": "BV001_streaming"}
+      //               }
+      //             }
+      //           }
+      //         }
       final aigcConfig = AigcConfig(
-        appId: '67eb953062b4b601a6df1348', // 替换为您的 APP ID
-        roomId: 'room1',
-        taskId: 'user1',
-        token:
-            '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==', // 替换为您的 Token
-
-        serverUrl: 'http://localhost:3001',
+        appId: "67f3871435d851017835d866",
+        roomId: "room1",
+        taskId: "user1",
         agentConfig: AgentConfig(
-          userId: 'RobotMan_123',
-          welcomeMessage: '你好，我是你的AI小助手，有什么可以帮你的吗？',
-          enableConversationStateCallback: true,
-          serverMessageSignatureForRTS: 'conversation',
+          userId: 'ChatBot01',
+          welcomeMessage: '你好，我是火山引擎 RTC 语音助手，有什么需要帮忙的吗？',
           targetUserId: ['user1'],
         ),
         config: Config(
           lLMConfig: LlmConfig(
-              mode: 'ArkV3',
-              endPointId: 'ep-20250401160533-rr59m', // 替换为您的 EndPointID
-              systemMessages: ["你是小宁，性格幽默又善解人意。你在表达时需简明扼要，有自己的观点。"],
-              modelName: 'Doubao-pro-32k',
-              modelVersion: '1.0',
-              prefill: true,
-              maxTokens: 1024,
-              temperature: 0.1,
-              topP: 0.3,
-              welcomeSpeech: "你好，我是你的AI小助手，有什么可以帮你的吗？",
-              ),
-             
-            
+            mode: 'ArkV3',
+            endPointId: 'ep-20250401160533-rr59m',
+          ),
           tTSConfig: TtsConfig(
             provider: 'volcano',
             providerParams: ProviderParams(
-              appId: '4799544484', // 替换为您的 TTS AppID
-              cluster: 'volcano_tts',
+              app: App(appid: '4799544484', cluster: 'volcano_tts'),
+              audio: Audio(voiceType: 'BV001_streaming'),
             ),
-            audio: Audio(
-              voiceType: 'BV001_streaming',
-              speedRatio: 1
-            ),
-            ignoreBracketText: [1,2,3,4,5],
           ),
           aSRConfig: AsrConfig(
             provider: 'volcano',
-            providerParams: ProviderParams(
+            providerParams: AsrProviderParams(
               mode: 'smallmodel',
-              appId: '4799544484', // 替换为您的 ASR AppID
+              appId: '4799544484',
               cluster: 'volcengine_streaming_common',
             ),
-
-           vADConfig: VadConfig(
-              silenceTime: 600,         // 静音时间
-              silenceThreshold: 200,    // 静音阈值
-           ),
-            volumeGain: 0.3,
-
           ),
-          interruptMode: 0,
-          subtitleConfig: SubtitleConfig(subtitleMode: 0),
         ),
       );
-await Future.delayed(const Duration(seconds: 1));
-   
+      await Future.delayed(const Duration(seconds: 1));
+
       // 使用 AigcConfig 初始化插件
       final success = await RtcAigcPlugin.initialize(
+        baseUrl: "http://localhost:3001",
         config: aigcConfig,
       );
 
@@ -201,11 +218,40 @@ await Future.delayed(const Duration(seconds: 1));
   void _setupSubscriptions() {
     // 订阅字幕流
     _subtitleSubscription = RtcAigcPlugin.subtitleStream.listen((subtitle) {
+      // 增加计数器
+      _subtitleCallbackCount++;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final timeSinceLastSubtitle =
+          _lastSubtitleTimestamp > 0 ? now - _lastSubtitleTimestamp : 0;
+      _lastSubtitleTimestamp = now;
+
       final Map<String, dynamic> subtitleMap = subtitle;
-      setState(() {
-        _currentSubtitle = subtitleMap['text'] ?? '';
-        _isSubtitleFinal = subtitleMap['isFinal'] ?? false;
-      });
+      final String text = subtitleMap['text'] ?? '';
+      final bool isFinal = subtitleMap['isFinal'] ?? false;
+
+      // 调试模式下输出全部字幕信息
+      if (_debugMode) {
+        debugPrint(
+            '【字幕回调】#$_subtitleCallbackCount 收到字幕，间隔: ${timeSinceLastSubtitle}ms\n内容: "$text"\n是否最终: $isFinal');
+      }
+
+      // 仅在字幕有内容时处理
+      if (text.isNotEmpty) {
+        setState(() {
+          _currentSubtitle = text;
+          _isSubtitleFinal = isFinal;
+
+          // 只输出最终字幕的日志
+          if (isFinal) {
+            debugPrint('【示例】收到最终字幕: $text');
+          }
+
+          // 处理字幕添加到聊天列表的逻辑
+          _handleSubtitleInChatList(text, isFinal);
+        });
+      }
+    }, onError: (error) {
+      debugPrint('【错误】字幕流错误: $error');
     });
 
     // 订阅音频状态流
@@ -329,7 +375,7 @@ await Future.delayed(const Duration(seconds: 1));
           roomId: 'room1',
           userId: 'user1',
           token:
-              '00167eb953062b4b601a6df1348QAAId6gE4FHzZ2CM/GcFAHJvb20xBQB1c2VyMQYAAABgjPxnAQBgjPxnAgBgjPxnAwBgjPxnBABgjPxnBQBgjPxnIACiJ43l8vpJTdIYqpqovQOKogW6NBmuyd0jEmubjbCR8Q==');
+              '00167f3871435d851017835d866QAA2tbkBY338Z+O3BWgFAHJvb20xBQB1c2VyMQYAAADjtwVoAQDjtwVoAgDjtwVoAwDjtwVoBADjtwVoBQDjtwVoIAC0vvemDyBdXHdEBMgp0JkssQ39DfqlxzeX40uOaVgVQQ==');
 
       if (success) {
         setState(() {
@@ -550,7 +596,7 @@ await Future.delayed(const Duration(seconds: 1));
         text: text,
         isUser: false,
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        type: MessageType.text,
+        type: MessageType.system,
       ));
     });
     _scrollToBottom();
@@ -559,10 +605,13 @@ await Future.delayed(const Duration(seconds: 1));
   // 开始音频测试
   Future<void> _startAudioTest() async {
     if (_isAudioTestRunning) return;
-    
+
     try {
-      Map<String, dynamic> result = await RtcAigcPlugin.startAudioPlaybackDeviceTest( "http://music.163.com/song/media/outer/url?id=447925558.mp3",200);
-      
+      Map<String, dynamic> result =
+          await RtcAigcPlugin.startAudioPlaybackDeviceTest(
+              "http://music.163.com/song/media/outer/url?id=447925558.mp3",
+              200);
+
       if (result['success']) {
         setState(() {
           _isAudioTestRunning = true;
@@ -579,10 +628,11 @@ await Future.delayed(const Duration(seconds: 1));
   // 停止音频测试
   Future<void> _stopAudioTest() async {
     if (!_isAudioTestRunning) return;
-    
+
     try {
-      Map<String, dynamic> result = await RtcAigcPlugin.stopAudioDeviceRecordAndPlayTest();
-      
+      Map<String, dynamic> result =
+          await RtcAigcPlugin.stopAudioDeviceRecordAndPlayTest();
+
       if (result['success']) {
         setState(() {
           _isAudioTestRunning = false;
@@ -594,6 +644,98 @@ await Future.delayed(const Duration(seconds: 1));
     } catch (e) {
       _addSystemMessage('停止音频设备测试出错: $e');
     }
+  }
+
+  // 新增: 处理字幕在聊天列表中的显示
+  void _handleSubtitleInChatList(String text, bool isFinal) {
+    if (text.isEmpty) {
+      return;
+    }
+
+    // 如果是最终字幕且没有临时字幕，直接添加为新消息
+    if (isFinal && !_hasPendingSubtitle) {
+      debugPrint('【示例】添加新的最终字幕消息: $text');
+      _addAiMessage(text, isFinal: true);
+      return;
+    }
+
+    // 如果是第一个临时字幕，创建新消息
+    if (!_hasPendingSubtitle) {
+      _currentAiMessageId = DateTime.now().millisecondsSinceEpoch.toString();
+      _addAiMessage(text, isFinal: false, messageId: _currentAiMessageId);
+      _hasPendingSubtitle = true;
+      debugPrint('【示例】添加新的临时字幕消息: $text');
+      return;
+    }
+
+    // 如果已有临时字幕，更新现有消息
+    if (_hasPendingSubtitle && _currentAiMessageId != null) {
+      _updateAiMessage(text, isFinal: isFinal, messageId: _currentAiMessageId!);
+
+      if (isFinal) {
+        debugPrint('【示例】更新为最终字幕: $text');
+      }
+
+      // 如果是最终字幕，重置状态
+      if (isFinal) {
+        _hasPendingSubtitle = false;
+        _currentAiMessageId = null;
+      }
+    }
+  }
+
+  // 新增: 添加AI消息到聊天列表
+  void _addAiMessage(String text, {bool isFinal = true, String? messageId}) {
+    final id = messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+    setState(() {
+      _messages.add(RtcAigcMessage.text(
+        text: text,
+        isUser: false,
+        id: id,
+      ));
+
+      // 如果不是最终字幕，将ID添加到临时字幕集合
+      if (!isFinal) {
+        _pendingSubtitleIds.add(id);
+      }
+    });
+    _scrollToBottom();
+  }
+
+  // 新增: 更新现有的AI消息
+  void _updateAiMessage(String text,
+      {required bool isFinal, required String messageId}) {
+    setState(() {
+      for (int i = 0; i < _messages.length; i++) {
+        if (_messages[i].id == messageId) {
+          _messages[i] = RtcAigcMessage.text(
+            text: text,
+            isUser: false,
+            id: messageId,
+          );
+
+          // 如果是最终字幕，从临时字幕集合中移除
+          if (isFinal) {
+            _pendingSubtitleIds.remove(messageId);
+          }
+          break;
+        }
+      }
+    });
+    _scrollToBottom();
+  }
+
+  // 切换调试模式
+  void _toggleDebugMode() {
+    setState(() {
+      _debugMode = !_debugMode;
+      _addSystemMessage(_debugMode ? '已开启调试模式' : '已关闭调试模式');
+      debugPrint('【示例】调试模式: $_debugMode');
+      if (_debugMode) {
+        debugPrint('【字幕统计】总计收到 $_subtitleCallbackCount 条字幕回调');
+      }
+    });
   }
 
   @override
@@ -639,7 +781,6 @@ await Future.delayed(const Duration(seconds: 1));
             child: isMobile ? _buildMobileLayout() : _buildDesktopLayout(),
           ),
         ],
-
       ),
     );
   }
@@ -704,8 +845,8 @@ await Future.delayed(const Duration(seconds: 1));
           ),
         ),
 
-        // 字幕显示
-        if (_currentSubtitle.isNotEmpty || _isSpeaking)
+        // 字幕显示 - 仅在没有临时字幕显示在聊天列表时且AI正在说话时显示
+        if (!_hasPendingSubtitle && _isSpeaking)
           local_widgets.SubtitleView(
             text: _currentSubtitle,
             isFinal: _isSubtitleFinal,
@@ -730,7 +871,7 @@ await Future.delayed(const Duration(seconds: 1));
               ),
               const SizedBox(width: 8.0),
               ElevatedButton(
-                onPressed: _sendMessage,
+                onPressed: _isConversationActive ? _sendMessage : null,
                 child: const Text('发送'),
               ),
             ],
@@ -756,6 +897,8 @@ await Future.delayed(const Duration(seconds: 1));
                 _buildStatusItem(
                     '音频采集', _isAiAudioCaptureStarted ? '已开始' : '未开始'),
                 _buildStatusItem('媒体发布', _isAiPublished ? '已发布' : '未发布'),
+                if (_debugMode)
+                  _buildStatusItem('字幕回调', '$_subtitleCallbackCount 次'),
               ],
             ),
           ),
@@ -822,6 +965,37 @@ await Future.delayed(const Duration(seconds: 1));
             ),
           ),
         ),
+
+        // 调试工具卡片 (新增)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('调试工具', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8.0),
+                ElevatedButton(
+                  onPressed: _toggleDebugMode,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _debugMode ? Colors.green : Colors.grey,
+                  ),
+                  child: Text(_debugMode ? '关闭调试模式' : '开启调试模式'),
+                ),
+                if (_debugMode) ...[
+                  const SizedBox(height: 8.0),
+                  ElevatedButton(
+                    onPressed: () {
+                      _addSystemMessage(
+                          '字幕统计: 总计 $_subtitleCallbackCount 条字幕回调');
+                    },
+                    child: const Text('显示字幕统计'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -850,7 +1024,11 @@ await Future.delayed(const Duration(seconds: 1));
 
   Widget _buildMessageItem(RtcAigcMessage message) {
     final isUser = message.isUser ?? false;
-    final isSystem = message.isUser ?? false;
+    final isSystem = message.type == MessageType.system;
+
+    // 检查是否为临时字幕
+    final isTemporarySubtitle =
+        !isUser && _pendingSubtitleIds.contains(message.id);
 
     if (isSystem) {
       return Container(
@@ -875,8 +1053,16 @@ await Future.delayed(const Duration(seconds: 1));
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
-        color: isUser ? Colors.blue.shade100 : Colors.white,
+        color: isUser
+            ? Colors.blue.shade100
+            : (isTemporarySubtitle ? Colors.grey.shade100 : Colors.white),
         borderRadius: BorderRadius.circular(8.0),
+        border: isTemporarySubtitle
+            ? Border.all(
+                color: Colors.blue.shade200,
+                width: 1.0,
+                style: BorderStyle.solid)
+            : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -893,12 +1079,54 @@ await Future.delayed(const Duration(seconds: 1));
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isUser ? '我' : 'AI助手',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Text(
+                      isUser ? '我' : 'AI助手',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    if (isTemporarySubtitle) ...[
+                      const SizedBox(width: 8.0),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0, vertical: 2.0),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.0,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.blue),
+                              ),
+                            ),
+                            const SizedBox(width: 4.0),
+                            const Text(
+                              '输入中...',
+                              style:
+                                  TextStyle(fontSize: 12.0, color: Colors.blue),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4.0),
-                Text(message.text ?? ''),
+                Text(
+                  message.text ?? '',
+                  style: TextStyle(
+                    fontStyle: isTemporarySubtitle
+                        ? FontStyle.italic
+                        : FontStyle.normal,
+                  ),
+                ),
               ],
             ),
           ),
