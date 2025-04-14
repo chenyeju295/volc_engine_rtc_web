@@ -87,10 +87,10 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     setState(() {
       _status = '正在初始化...';
     });
-
+    
     try {
       final aigcConfig = AigcConfig(
-        appId: "67f3871435d851017835d866",
+        appId: "67b5aec82b4ee7020146d3b5",
         roomId: "room1",
         taskId: "user1",
         agentConfig: AgentConfig(
@@ -101,12 +101,12 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         config: Config(
           lLMConfig: LlmConfig(
             mode: 'ArkV3',
-            endPointId: 'ep-20250414121921-p9bn6',
+            endPointId: 'ep-20250219201359-h4qlt',
           ),
           tTSConfig: TtsConfig(
             provider: 'volcano',
             providerParams: ProviderParams(
-              app: App(appid: '4799544484', cluster: 'volcano_tts'),
+              app: App(appid: '6628478644', cluster: 'volcano_tts'),
               audio: Audio(voiceType: 'BV001_streaming'),
             ),
           ),
@@ -114,7 +114,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             provider: 'volcano',
             providerParams: AsrProviderParams(
               mode: 'smallmodel',
-              appId: '4799544484',
+              appId: '6628478644',
               cluster: 'volcengine_streaming_common',
             ),
           ),
@@ -122,9 +122,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
 
       final success = await RtcAigcPlugin.initialize(
-        baseUrl: "http://localhost:3001",
+        baseUrl: "http://8.134.220.112:32344",
         config: aigcConfig,
-        appKey: '05eeb1c0c3154acaa38a3886decc6b97',
+        appKey: '9f35c7d69dda4e119edcd64be9bf5142',
       );
 
       if (success) {
@@ -134,6 +134,17 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         });
 
         _setupSubscriptions();
+        
+        // 请求麦克风访问权限
+        final permissionResult = await RtcAigcPlugin.enableDevices(audio: true);
+        if (permissionResult['audio'] == true) {
+          _addSystemMessage('已获取麦克风权限');
+          
+          // 枚举设备
+          await _listDevices();
+        } else {
+          _addSystemMessage('获取麦克风权限失败: ${permissionResult['audioExceptionError'] ?? "未知错误"}');
+        }
       } else {
         setState(() {
           _status = '初始化失败';
@@ -368,9 +379,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     });
 
     try {
-      final success = await RtcAigcPlugin.startConversation(
-        welcomeMessage: '你好，我是AI助手，有什么可以帮助你的？',
-      );
+      final success = await RtcAigcPlugin.startConversation();
 
       if (success) {
         setState(() {
@@ -519,6 +528,41 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         _status = '错误: $e';
         _addSystemMessage('静音操作出错: $e');
       });
+    }
+  }
+
+  // 列出可用设备
+  Future<void> _listDevices() async {
+    try {
+      final devices = await RtcAigcPlugin.enumerateDevices();
+      if (devices.isNotEmpty) {
+        _addSystemMessage('发现 ${devices.length} 个媒体设备');
+        
+        // 分类设备
+        List<Map<String, dynamic>> audioInputs = [];
+        List<Map<String, dynamic>> audioOutputs = [];
+        
+        for (var device in devices) {
+          final kind = device['kind'] ?? '';
+          if (kind == 'audioinput') {
+            audioInputs.add(device);
+          } else if (kind == 'audiooutput') {
+            audioOutputs.add(device);
+          }
+        }
+        
+        if (audioInputs.isNotEmpty) {
+          _addSystemMessage('麦克风设备: ${audioInputs.length} 个');
+        }
+        
+        if (audioOutputs.isNotEmpty) {
+          _addSystemMessage('扬声器设备: ${audioOutputs.length} 个');
+        }
+      } else {
+        _addSystemMessage('未找到媒体设备');
+      }
+    } catch (e) {
+      _addSystemMessage('获取设备列表失败: $e');
     }
   }
 

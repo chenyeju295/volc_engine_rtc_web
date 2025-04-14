@@ -486,16 +486,124 @@ class RtcDeviceManager {
         return false;
       }
 
-      final result = await WebUtils.callMethodAsync(
-        engine,
-        'requestCameraAccess',
-        [],
-      );
-
-      return result == true;
+      // 调用WebUtils中的getUserMedia方法
+      final result = await WebUtils.enableDevices(video: true, audio: false);
+      
+      return result['video'] == true;
     } catch (e) {
-      debugPrint('RtcDeviceManager: 请求摄像头访问权限失败: $e');
+      debugPrint('RtcDeviceManager: 请求摄像头权限失败: $e');
       return false;
+    }
+  }
+
+  /// 请求麦克风访问权限
+  Future<bool> requestMicrophoneAccess() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return false;
+      }
+
+      // 调用WebUtils中的getUserMedia方法
+      final result = await WebUtils.enableDevices(video: false, audio: true);
+      _hasAudioInputPermission = result['audio'] == true;
+      
+      return _hasAudioInputPermission;
+    } catch (e) {
+      debugPrint('RtcDeviceManager: 请求麦克风权限失败: $e');
+      return false;
+    }
+  }
+
+  /// 获取设备权限
+  /// 
+  /// 向用户请求音频和/或视频设备的访问权限
+  /// @param options 请求选项，包含audio和video布尔值
+  /// @return 权限获取结果
+  Future<Map<String, dynamic>> enableDevices({
+    bool video = false,
+    bool audio = true, 
+  }) async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return {
+          'success': false,
+          'audio': false,
+          'video': false,
+          'error': '引擎未设置'
+        };
+      }
+
+      // 调用WebUtils中的enableDevices方法
+      final result = await WebUtils.enableDevices(
+        video: video,
+        audio: audio,
+      );
+      
+      // 更新音频权限状态
+      if (audio) {
+        _hasAudioInputPermission = result['audio'] == true;
+      }
+      
+      // 权限获取后刷新设备列表
+      if ((audio && result['audio'] == true) || (video && result['video'] == true)) {
+        await refreshDevices();
+      }
+      
+      // 添加success字段使返回格式与其他方法一致
+      result['success'] = (audio && !result['audio'] == true) || 
+                          (video && !result['video'] == true) 
+                          ? false : true;
+      
+      return result;
+    } catch (e) {
+      debugPrint('RtcDeviceManager: 获取设备权限失败: $e');
+      return {
+        'success': false,
+        'audio': false,
+        'video': false,
+        'error': e.toString()
+      };
+    }
+  }
+
+  /// 枚举所有媒体设备
+  /// 
+  /// 获取系统中所有可用的媒体输入和输出设备列表
+  /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
+  /// 推荐在调用enableDevices获取权限后使用本方法
+  /// 
+  /// @return 所有媒体设备的列表
+  Future<List<Map<String, dynamic>>> enumerateDevices() async {
+    try {
+      if (engine == null) {
+        debugPrint('RtcDeviceManager: 引擎未设置');
+        return [];
+      }
+
+      // 调用WebUtils中的enumerateDevices方法
+      final devices = await WebUtils.enumerateDevices();
+      final List<Map<String, dynamic>> result = [];
+      
+      // 将设备信息转换为Dart格式
+      if (devices.isNotEmpty) {
+        for (var device in devices) {
+          try {
+            final deviceObj = js_util.dartify(device);
+            if (deviceObj is Map) {
+              result.add(Map<String, dynamic>.from(deviceObj));
+            }
+          } catch (e) {
+            debugPrint('设备数据转换失败: $e');
+          }
+        }
+      }
+      
+      return result;
+    } catch (e) {
+      debugPrint('RtcDeviceManager: 枚举设备失败: $e');
+      return [];
     }
   }
 

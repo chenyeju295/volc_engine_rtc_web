@@ -4,13 +4,14 @@ import 'dart:js' as js;
 import 'dart:js_util' as js_util;
 import 'dart:js_interop';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Web utilities for handling JavaScript interop and resource loading
 class WebUtils {
   static const String sdkAssetPath = 'sdk/volengine_Web_4.66.1.js';
-  
+
   // SDK加载状态追踪
   static bool _isLoadingSDK = false;
   static Completer<void>? _sdkLoadCompleter;
@@ -21,16 +22,16 @@ class WebUtils {
     if (js.context.hasProperty('VERTC')) {
       return;
     }
-    
+
     // 如果正在加载，等待现有加载过程完成
     if (_isLoadingSDK && _sdkLoadCompleter != null) {
       return _sdkLoadCompleter!.future;
     }
-    
+
     // 开始新的加载过程
     _isLoadingSDK = true;
     _sdkLoadCompleter = Completer<void>();
-    
+
     try {
       // 尝试加载SDK
       await _loadVERTCScripts();
@@ -41,24 +42,24 @@ class WebUtils {
     } finally {
       _isLoadingSDK = false;
     }
-    
+
     return _sdkLoadCompleter!.future;
   }
 
   /// 加载VERTC脚本
   static Future<void> _loadVERTCScripts() async {
     debugPrint('开始加载RTC SDK...');
-    
+
     // 方法1: 通过script标签加载
     try {
       final sdkUrl = await _getAssetUrl(sdkAssetPath);
       if (sdkUrl == null) {
         throw Exception('无法解析资源URL: $sdkAssetPath');
       }
-      
+
       debugPrint('通过script标签加载SDK: $sdkUrl');
       await _loadScriptByTag(sdkUrl);
-      
+
       // 验证加载结果
       await Future.delayed(const Duration(milliseconds: 300));
       if (js.context.hasProperty('VERTC')) {
@@ -69,7 +70,7 @@ class WebUtils {
       debugPrint('方法1加载失败: $e');
       // 继续尝试下一种方法
     }
-    
+
     // 方法2: 预加载内容然后注入
     try {
       final sdkUrl = await _getAssetUrl(sdkAssetPath);
@@ -77,7 +78,7 @@ class WebUtils {
         debugPrint('预加载SDK内容后注入: $sdkUrl');
         final content = await _fetchScriptContent(sdkUrl);
         await _injectScriptContent(content);
-        
+
         // 验证加载结果
         await Future.delayed(const Duration(milliseconds: 300));
         if (js.context.hasProperty('VERTC')) {
@@ -89,12 +90,12 @@ class WebUtils {
       debugPrint('方法2加载失败: $e');
       // 继续尝试下一种方法
     }
-    
+
     // 方法3: 直接从assets加载
     try {
       debugPrint('从assets直接加载SDK内容');
       await _loadScriptFromAssets(sdkAssetPath);
-      
+
       // 验证加载结果
       await Future.delayed(const Duration(milliseconds: 300));
       if (js.context.hasProperty('VERTC')) {
@@ -104,27 +105,27 @@ class WebUtils {
     } catch (e) {
       debugPrint('方法3加载失败: $e');
     }
-    
+
     // 所有方法都失败
     throw Exception('所有SDK加载方法都失败');
   }
-  
+
   /// 通过script标签加载脚本
   static Future<void> _loadScriptByTag(String url) {
     final completer = Completer<void>();
-    
+
     final script = html.ScriptElement();
     script.type = 'application/javascript';
     script.src = url;
-    
+
     script.onLoad.listen((_) {
       completer.complete();
     });
-    
+
     script.onError.listen((event) {
       completer.completeError('脚本加载失败: $url');
     });
-    
+
     html.document.head!.append(script);
     return completer.future;
   }
@@ -286,12 +287,12 @@ class WebUtils {
       if (target == null) {
         throw Exception('JavaScript对象为空，无法调用方法：$method');
       }
-      
+
       // 支持通过字符串路径访问目标对象
       if (target is String) {
         final parts = target.split('.');
         dynamic obj = js.context;
-        
+
         for (int i = 0; i < parts.length; i++) {
           if (obj.hasProperty(parts[i])) {
             obj = obj[parts[i]];
@@ -299,13 +300,13 @@ class WebUtils {
             throw Exception('找不到对象路径: ${parts.sublist(0, i + 1).join('.')}');
           }
         }
-        
+
         if (method.isEmpty) {
           return obj; // 如果只需要获取对象属性
         }
         target = obj;
       }
-      
+
       // 包装函数参数
       List<dynamic> wrappedArgs = [];
       if (args != null) {
@@ -316,7 +317,7 @@ class WebUtils {
           return arg;
         }).toList();
       }
-      
+
       // 调用方法
       return js_util.callMethod(target, method, wrappedArgs);
     } catch (e) {
@@ -324,25 +325,26 @@ class WebUtils {
       throw Exception('调用JavaScript方法失败：$method - $e');
     }
   }
-  
+
   /// 异步调用JavaScript方法
   /// 自动处理Promise结果转换
-  static Future<dynamic> callJsAsync(dynamic target, String method, [List<dynamic>? args]) async {
+  static Future<dynamic> callJsAsync(dynamic target, String method,
+      [List<dynamic>? args]) async {
     try {
       dynamic result = callJs(target, method, args);
-      
+
       // 如果结果是Promise，转换为Future
       if (result != null && js_util.hasProperty(result, 'then')) {
         return await js_util.promiseToFuture(result);
       }
-      
+
       return result;
     } catch (e) {
       debugPrint('异步调用方法失败: $method - $e');
       throw Exception('异步调用JavaScript方法失败：$method - $e');
     }
   }
-  
+
   /// 获取JavaScript对象属性
   static dynamic getProperty(dynamic target, String propertyPath) {
     try {
@@ -351,13 +353,13 @@ class WebUtils {
         propertyPath = '$target.$propertyPath';
         target = js.context;
       }
-      
+
       final parts = propertyPath.split('.');
       dynamic obj = target;
-      
+
       for (int i = 0; i < parts.length; i++) {
         if (obj == null) return null;
-        
+
         if (obj is js.JsObject && obj.hasProperty(parts[i])) {
           obj = obj[parts[i]];
         } else if (js_util.hasProperty(obj, parts[i])) {
@@ -366,7 +368,7 @@ class WebUtils {
           return null;
         }
       }
-      
+
       return obj;
     } catch (e) {
       debugPrint('获取属性失败: $propertyPath - $e');
@@ -657,7 +659,7 @@ class WebUtils {
       if (binaryData is Uint8List) {
         return binaryData;
       }
-      
+
       // 处理List<int>
       if (binaryData is List<int>) {
         return Uint8List.fromList(binaryData);
@@ -666,20 +668,21 @@ class WebUtils {
       // 处理ArrayBuffer或TypedArray
       if (binaryData != null && js_util.hasProperty(binaryData, 'byteLength')) {
         // 创建Uint8Array视图
-        final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT') 
-            ? binaryData  // 已经是TypedArray
+        final uint8Array = js_util.hasProperty(binaryData, 'BYTES_PER_ELEMENT')
+            ? binaryData // 已经是TypedArray
             : js_util.callConstructor(
-                js_util.getProperty(js_util.globalThis, 'Uint8Array'), [binaryData]);
-        
+                js_util.getProperty(js_util.globalThis, 'Uint8Array'),
+                [binaryData]);
+
         // 获取数组长度
         final int length = js_util.getProperty(uint8Array, 'length');
-        
+
         // 创建Uint8List并复制数据
         final Uint8List result = Uint8List(length);
         for (int i = 0; i < length; i++) {
           result[i] = js_util.getProperty(uint8Array, i);
         }
-        
+
         return result;
       }
 
@@ -705,14 +708,15 @@ class WebUtils {
       if (bytes.isEmpty) {
         return '';
       }
-      
+
       // 检查常见的TLV格式标记
       if (bytes.length >= 8) {
         final String magic = String.fromCharCodes(bytes.sublist(0, 4));
         if (magic == 'conv' || magic == 'subv' || magic == 'func') {
           // 解析TLV格式消息
-          final int contentLength = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-          
+          final int contentLength =
+              (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+
           if (contentLength > 0 && bytes.length >= (8 + contentLength)) {
             try {
               // 提取内容部分并解码
@@ -723,7 +727,7 @@ class WebUtils {
           }
         }
       }
-      
+
       // 尝试用UTF-8解码（最常见的情况）
       try {
         return utf8.decode(bytes, allowMalformed: true);
@@ -760,7 +764,7 @@ class WebUtils {
   static List<dynamic>? _cachedAudioOutputDevices;
   static DateTime? _lastAudioInputDeviceRefresh;
   static DateTime? _lastAudioOutputDeviceRefresh;
-  
+
   // 缓存有效期（毫秒）
   static const int _deviceCacheValidityMs = 2000; // 2秒
 
@@ -768,9 +772,10 @@ class WebUtils {
   static Future<List<dynamic>> getAudioInputDevices() async {
     // 检查缓存是否有效
     final now = DateTime.now();
-    if (_cachedAudioInputDevices != null && 
-        _lastAudioInputDeviceRefresh != null && 
-        now.difference(_lastAudioInputDeviceRefresh!).inMilliseconds < _deviceCacheValidityMs) {
+    if (_cachedAudioInputDevices != null &&
+        _lastAudioInputDeviceRefresh != null &&
+        now.difference(_lastAudioInputDeviceRefresh!).inMilliseconds <
+            _deviceCacheValidityMs) {
       // 使用缓存，不打印日志，减少重复信息
       return _cachedAudioInputDevices!;
     }
@@ -788,22 +793,23 @@ class WebUtils {
       }
 
       // 调用SDK方法获取设备列表
-      final devices = await callJsAsync(vertcObj, 'enumerateAudioCaptureDevices');
-      
+      final devices =
+          await callJsAsync(vertcObj, 'enumerateAudioCaptureDevices');
+
       if (devices != null) {
         final length = getProperty(devices, 'length') ?? 0;
-        
+
         // 只有首次或设备数量变化时才打印日志
-        if (_cachedAudioInputDevices == null || 
+        if (_cachedAudioInputDevices == null ||
             _cachedAudioInputDevices!.length != length) {
           debugPrint('获取到 $length 个音频输入设备');
         }
-        
+
         // 更新缓存
         _cachedAudioInputDevices = devices;
         _lastAudioInputDeviceRefresh = now;
       }
-      
+
       return devices ?? [];
     } catch (e) {
       debugPrint('获取音频输入设备列表失败: $e');
@@ -815,9 +821,10 @@ class WebUtils {
   static Future<List<dynamic>> getAudioOutputDevices() async {
     // 检查缓存是否有效
     final now = DateTime.now();
-    if (_cachedAudioOutputDevices != null && 
-        _lastAudioOutputDeviceRefresh != null && 
-        now.difference(_lastAudioOutputDeviceRefresh!).inMilliseconds < _deviceCacheValidityMs) {
+    if (_cachedAudioOutputDevices != null &&
+        _lastAudioOutputDeviceRefresh != null &&
+        now.difference(_lastAudioOutputDeviceRefresh!).inMilliseconds <
+            _deviceCacheValidityMs) {
       // 使用缓存，不打印日志
       return _cachedAudioOutputDevices!;
     }
@@ -835,40 +842,161 @@ class WebUtils {
       }
 
       // 调用SDK方法获取设备列表
-      final devices = await callJsAsync(vertcObj, 'enumerateAudioPlaybackDevices');
-      
+      final devices =
+          await callJsAsync(vertcObj, 'enumerateAudioPlaybackDevices');
+
       if (devices != null) {
         final length = getProperty(devices, 'length') ?? 0;
-        
+
         // 只有首次或设备数量变化时才打印日志
-        if (_cachedAudioOutputDevices == null || 
+        if (_cachedAudioOutputDevices == null ||
             _cachedAudioOutputDevices!.length != length) {
           debugPrint('获取到 $length 个音频输出设备');
         }
-        
+
         // 更新缓存
         _cachedAudioOutputDevices = devices;
         _lastAudioOutputDeviceRefresh = now;
       }
-      
+
       return devices ?? [];
     } catch (e) {
       debugPrint('获取音频输出设备列表失败: $e');
       return _cachedAudioOutputDevices ?? [];
     }
   }
-  
+
   /// 强制刷新设备列表缓存
   static Future<void> refreshDeviceCaches() async {
     _cachedAudioInputDevices = null;
     _cachedAudioOutputDevices = null;
     _lastAudioInputDeviceRefresh = null;
     _lastAudioOutputDeviceRefresh = null;
-    
+
     // 重新获取并缓存设备列表
     await getAudioInputDevices();
     await getAudioOutputDevices();
-    
+
     debugPrint('设备列表缓存已刷新');
+  }
+
+  /// 向用户获取设备权限
+  ///
+  /// 参数:
+  ///   options: 可选参数，指定需要获取权限的设备类型
+  ///     - video: 是否获取视频设备权限
+  ///     - audio: 是否获取音频设备权限
+  ///
+  /// 返回值:
+  ///   Promise对象，解析为包含以下字段的对象:
+  ///     - video: 是否获得视频设备权限
+  ///     - audio: 是否获得音频设备权限
+  ///     - videoExceptionError: 获取视频设备权限报错信息
+  ///     - audioExceptionError: 获取音频设备权限报错信息
+  static Future<Map<String, dynamic>> enableDevices({
+    bool video = false,
+    bool audio = true,
+  }) async {
+    final result = <String, dynamic>{
+      'video': false,
+      'audio': false,
+    };
+
+    try {
+      debugPrint('请求设备权限: video=$video, audio=$audio');
+
+      // 准备媒体约束
+      final constraints = <String, dynamic>{};
+      if (audio) constraints['audio'] = true;
+      if (video) constraints['video'] = true;
+
+      // 调用浏览器getUserMedia API
+      final stream = await callGlobalMethodAsync(
+        'navigator.mediaDevices.getUserMedia',
+        [js_util.jsify(constraints)],
+      );
+
+      if (stream != null) {
+        // 检查获取的权限
+        if (audio) {
+          final audioTracks = js_util.callMethod(stream, 'getAudioTracks', []);
+          result['audio'] = js_util.getProperty(audioTracks, 'length') > 0;
+        }
+
+        if (video) {
+          final videoTracks = js_util.callMethod(stream, 'getVideoTracks', []);
+          result['video'] = js_util.getProperty(videoTracks, 'length') > 0;
+        }
+
+        // 停止所有轨道，释放设备
+        final tracks = js_util.callMethod(stream, 'getTracks', []);
+        final int length = js_util.getProperty(tracks, 'length') ?? 0;
+
+        for (int i = 0; i < length; i++) {
+          final track = js_util.getProperty(tracks, i);
+          js_util.callMethod(track, 'stop', []);
+        }
+
+        debugPrint('获取设备权限成功: ${result.toString()}');
+      }
+    } catch (e) {
+      debugPrint('获取设备权限失败: $e');
+
+      // 确定是哪种设备的权限获取失败
+      if (e.toString().contains('audio')) {
+        result['audioExceptionError'] = e;
+      } else if (e.toString().contains('video')) {
+        result['videoExceptionError'] = e;
+      } else {
+        // 如果不能确定，两种设备都记录错误
+        if (audio) result['audioExceptionError'] = e;
+        if (video) result['videoExceptionError'] = e;
+      }
+    }
+
+    // 权限获取后，重新枚举设备列表
+    await refreshDeviceCaches();
+
+    return result;
+  }
+
+  /// 枚举可用的媒体输入和输出设备，比如麦克风、摄像头、耳机等
+  ///
+  /// 注意: 浏览器只有在已经获得设备权限时，才能准确获取设备信息。
+  /// 建议通过 enableDevices 访问授权后调用本接口。
+  ///
+  /// 返回值: 媒体设备列表 (MediaDeviceInfo[])
+  static Future<List<dynamic>> enumerateDevices() async {
+    try {
+      debugPrint('枚举所有媒体设备');
+
+      // 调用浏览器API
+      final devices = await callGlobalMethodAsync(
+        'navigator.mediaDevices.enumerateDevices',
+        [],
+      );
+
+      if (devices != null) {
+        final length = js_util.getProperty(devices, 'length') ?? 0;
+        debugPrint('获取到 $length 个媒体设备');
+
+        // 打印设备列表帮助调试（在生产环境可以移除）
+        if (kDebugMode && length > 0) {
+          for (int i = 0; i < length; i++) {
+            final device = js_util.getProperty(devices, i);
+            final kind = js_util.getProperty(device, 'kind') ?? '';
+            final label = js_util.getProperty(device, 'label') ?? '(无标签)';
+            final deviceId = js_util.getProperty(device, 'deviceId') ?? '';
+          }
+        }
+
+        return devices;
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint('枚举媒体设备失败: $e');
+      return [];
+    }
   }
 }

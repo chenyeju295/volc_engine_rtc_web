@@ -333,9 +333,7 @@ class RtcAigcPlugin {
   }
 
   /// Start a conversation with the AI
-  static Future<bool> startConversation({
-    String? welcomeMessage,
-  }) async {
+  static Future<bool> startConversation() async {
     try {
       if (_rtcService != null) {
         return await _rtcService!.startConversation();
@@ -530,30 +528,70 @@ class RtcAigcPlugin {
   }
 
   /// 切换音频设备
-  static Future<Map<String, dynamic>> switchAudioDevice(String deviceId) async {
-    try {
-      if (_rtcService != null) {
-        final result = await _rtcService!.switchAudioDevice(deviceId);
-        if (result is bool) {
-          return {'success': result};
-        } else if (result is Map<String, dynamic>) {
-          return result;
-        }
-        return {'success': false, 'error': '未知返回类型'};
-      } else {
-        final result = await _channel
-            .invokeMethod('switchAudioDevice', {'deviceId': deviceId});
-        if (result is bool) {
-          return {'success': result};
-        } else if (result is Map<String, dynamic>) {
-          return result;
-        }
-        return {'success': false, 'error': '未知返回类型'};
-      }
-    } catch (e) {
-      debugPrint('Error switching audio device: $e');
-      return {'success': false, 'error': e.toString()};
+  static Future<dynamic> switchAudioDevice(String deviceId) async {
+    if (_rtcService == null) return {'success': false, 'error': '服务未初始化'};
+    return await _rtcService!.switchAudioDevice(deviceId);
+  }
+
+  /// ---------- 设备权限相关方法 ----------
+
+  /// 启用设备权限
+  /// 
+  /// 向用户请求音频和/或视频设备的访问权限
+  /// 这是使用媒体设备前的推荐做法
+  /// 
+  /// @param video 是否请求视频设备权限
+  /// @param audio 是否请求音频设备权限
+  /// @return 权限请求结果
+  static Future<Map<String, dynamic>> enableDevices({
+    bool video = false,
+    bool audio = true,
+  }) async {
+    if (_rtcService == null) {
+      return {
+        'success': false,
+        'audio': false,
+        'video': false,
+        'error': '服务未初始化'
+      };
     }
+    
+    return await _rtcService!.enableDevices(
+      video: video,
+      audio: audio,
+    );
+  }
+
+  /// 枚举所有媒体设备
+  /// 
+  /// 获取系统中所有可用的媒体输入和输出设备
+  /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
+  /// 推荐在调用enableDevices获取权限后使用本方法
+  /// 
+  /// @return 所有媒体设备的列表
+  static Future<List<Map<String, dynamic>>> enumerateDevices() async {
+    if (_rtcService == null) return [];
+    return await _rtcService!.enumerateDevices();
+  }
+
+  /// 请求麦克风访问权限
+  /// 
+  /// 向用户请求麦克风的访问权限
+  /// 
+  /// @return 是否成功获得权限
+  static Future<bool> requestMicrophoneAccess() async {
+    if (_rtcService == null) return false;
+    return await _rtcService!.requestMicrophoneAccess();
+  }
+
+  /// 请求摄像头访问权限
+  /// 
+  /// 向用户请求摄像头的访问权限
+  /// 
+  /// @return 是否成功获得权限
+  static Future<bool> requestCameraAccess() async {
+    if (_rtcService == null) return false;
+    return await _rtcService!.requestCameraAccess();
   }
 
   /// 获取音频输入设备列表
@@ -562,11 +600,7 @@ class RtcAigcPlugin {
       if (_rtcService != null) {
         return await _rtcService!.getAudioInputDevices();
       } else {
-        final result = await _channel.invokeMethod('getAudioInputDevices');
-        if (result is List) {
-          return List<Map<String, dynamic>>.from(
-              result.map((item) => Map<String, dynamic>.from(item)));
-        }
+        debugPrint('Error getting audio input devices: _rtcService is null');
         return [];
       }
     } catch (e) {
