@@ -16,6 +16,8 @@ import 'package:rtc_aigc_plugin/src/services/rtc_event_manager.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
+import '../utils/token_generator.dart';
+
 /// RTC消息回调
 typedef RtcMessageCallback = void Function(RtcAigcMessage message);
 
@@ -214,17 +216,23 @@ class RtcService {
 
   ///
   final String _baseUrl;
+  final String _appKey;
+  final String _userId;
 
   /// 构造函数 - 使用依赖注入
   RtcService({
     required AigcConfig config,
     required String baseUrl,
+    required String appKey,
+    required String userId,
     required RtcEngineManager engineManager,
     required RtcDeviceManager deviceManager,
     required RtcEventManager eventManager,
     required RtcMessageHandler messageHandler,
   })  : _config = config,
         _baseUrl = baseUrl,
+        _appKey = appKey,
+        _userId = userId,
         _engineManager = engineManager,
         _deviceManager = deviceManager,
         _messageHandler = messageHandler,
@@ -657,6 +665,8 @@ class RtcService {
     _userPublishStreamCallback = callback;
   }
 
+  String _currentToken = '';
+
   /// 初始化服务
   ///
   /// 此方法负责初始化RTC服务的所有组件：
@@ -733,11 +743,7 @@ class RtcService {
   }
 
   /// 加入RTC房间
-  Future<bool> joinRoom({
-    required String roomId,
-    required String userId,
-    required String token,
-  }) async {
+  Future<bool> joinRoom() async {
     try {
       if (!_checkInitialized()) return false;
 
@@ -746,11 +752,14 @@ class RtcService {
         return true;
       }
 
+      // 生成令牌
+      _currentToken = await generateToken();
+
       // 加入RTC房间
       final joinSuccess = await _engineManager.joinRoom(
-        roomId: roomId,
-        userId: userId,
-        token: token,
+        roomId: config.roomId.toString(),
+        userId: _userId,
+        token: _currentToken,
       );
 
       if (!joinSuccess) {
@@ -766,6 +775,22 @@ class RtcService {
     } catch (e) {
       debugPrint('【RTC服务】加入房间时发生错误: $e');
       return false;
+    }
+  }
+
+  /// 生成令牌
+  Future<String> generateToken() async {
+    try {
+      _currentToken = await TokenGenerator.generateToken(
+        appId: config.appId.toString(),
+        appKey: _appKey,
+        roomId: config.roomId.toString(),
+        userId: _userId,
+      );
+      return _currentToken;
+    } catch (e) {
+      debugPrint('生成令牌失败: $e');
+      throw Exception('Failed to generate token: $e');
     }
   }
 
@@ -816,10 +841,10 @@ class RtcService {
     try {
       if (!_checkInitialized()) return false;
 
-      // if (!_isInRoom) {
-      //   debugPrint('【RTC服务】未在房间中，无法开始对话');
-      //   return false;
-      // }
+      if (!_isInRoom) {
+        await joinRoom();
+        return false;
+      }
 
       if (_isInConversation) {
         debugPrint('【RTC服务】已经在对话中');
@@ -1164,117 +1189,6 @@ class RtcService {
     } catch (e) {
       debugPrint('【RTC服务】获取当前音频输出设备ID时发生错误: $e');
       return null;
-    }
-  }
-
-  /// 启动音频播放设备测试
-  ///
-  /// 测试启动后，循环播放指定的音频文件，同时会触发音量回调
-  ///
-  /// @param filePath 指定播放设备检测的音频文件网络地址。包括格式 wav 和 mp3
-  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
-  /// @return 测试结果 Map<String, dynamic>
-  Future<Map<String, dynamic>> startAudioPlaybackDeviceTest(
-      String filePath, int indicationInterval) async {
-    try {
-      if (!_checkInitialized()) {
-        return {'success': false, 'error': '服务未初始化'};
-      }
-
-      // 委托给设备管理器处理
-      final result = await _deviceManager.startAudioPlaybackDeviceTest(
-          filePath, indicationInterval);
-
-      return result.toMap();
-    } catch (e) {
-      debugPrint('【RTC服务】启动音频播放设备测试时发生错误: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  /// 停止音频播放设备测试
-  ///
-  /// @return 测试结果 Map<String, dynamic>
-  Future<Map<String, dynamic>> stopAudioPlaybackDeviceTest() async {
-    try {
-      if (!_checkInitialized()) {
-        return {'success': false, 'error': '服务未初始化'};
-      }
-
-      // 委托给设备管理器处理
-      final result = await _deviceManager.stopAudioPlaybackDeviceTest();
-
-      return result.toMap();
-    } catch (e) {
-      debugPrint('【RTC服务】停止音频播放设备测试时发生错误: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  /// 开始音频采集设备和播放设备测试
-  ///
-  /// 测试开始后，音频设备开始采集本地声音，30秒后自动停止采集并播放
-  ///
-  /// @param indicationInterval 音量回调的时间间隔，单位为毫秒，推荐设置200毫秒以上
-  /// @param onAutoplayFailed 由于浏览器自动播放策略影响，导致录制音频播放失败时回调
-  /// @return 测试结果 Map<String, dynamic>
-  Future<Map<String, dynamic>> startAudioDeviceRecordTest(
-      int indicationInterval,
-      {Function? onAutoplayFailed}) async {
-    try {
-      if (!_checkInitialized()) {
-        return {'success': false, 'error': '服务未初始化'};
-      }
-
-      // 委托给设备管理器处理
-      final result = await _deviceManager.startAudioDeviceRecordTest(
-          indicationInterval,
-          onAutoplayFailed: onAutoplayFailed);
-
-      return result.toMap();
-    } catch (e) {
-      debugPrint('【RTC服务】开始音频设备录制测试时发生错误: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  /// 停止采集本地音频，并开始播放采集到的声音
-  ///
-  /// 在startAudioDeviceRecordTest调用后30秒内调用，可以提前结束录制并开始播放
-  ///
-  /// @return 测试结果 Map<String, dynamic>
-  Future<Map<String, dynamic>> stopAudioDeviceRecordAndPlayTest() async {
-    try {
-      if (!_checkInitialized()) {
-        return {'success': false, 'error': '服务未初始化'};
-      }
-
-      // 委托给设备管理器处理
-      final result = await _deviceManager.stopAudioDeviceRecordAndPlayTest();
-
-      return result.toMap();
-    } catch (e) {
-      debugPrint('【RTC服务】停止录制并播放测试时发生错误: $e');
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  /// 停止音频设备播放测试
-  ///
-  /// @return 测试结果 Map<String, dynamic>
-  Future<Map<String, dynamic>> stopAudioDevicePlayTest() async {
-    try {
-      if (!_checkInitialized()) {
-        return {'success': false, 'error': '服务未初始化'};
-      }
-
-      // 委托给设备管理器处理
-      final result = await _deviceManager.stopAudioDevicePlayTest();
-
-      return result.toMap();
-    } catch (e) {
-      debugPrint('【RTC服务】停止音频设备播放测试时发生错误: $e');
-      return {'success': false, 'error': e.toString()};
     }
   }
 

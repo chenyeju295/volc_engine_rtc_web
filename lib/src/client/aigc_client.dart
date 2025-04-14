@@ -43,9 +43,6 @@ class AigcClient {
 
   final AigcConfig config;
 
-  /// 是否已连接
-  bool _isConnected = false;
-
   /// 客户端状态
   AigcClientState _state = AigcClientState.initial;
 
@@ -71,9 +68,6 @@ class AigcClient {
 
   /// 状态流
   Stream<AigcClientState> get stateStream => _stateController.stream;
-
-  /// 是否已连接
-  bool get isConnected => _isConnected;
 
   /// 当前状态
   AigcClientState get state => _state;
@@ -201,15 +195,9 @@ class AigcClient {
 
   /// 断开AIGC服务连接
   Future<bool> disconnect() async {
-    if (!_isConnected) {
-      debugPrint('[AigcClient] 未连接，无需断开');
-      return true;
-    }
-
     try {
       final result = await stopVoiceChat();
 
-      _isConnected = false;
       _setState(AigcClientState.initial);
 
       // 对于特定响应格式，我们需要更灵活地处理
@@ -226,11 +214,6 @@ class AigcClient {
 
   /// 发送消息给AI
   Future<bool> sendMessage(String text) async {
-    if (!_isConnected) {
-      debugPrint('[AigcClient] 未连接，无法发送消息');
-      return false;
-    }
-
     try {
       // 添加用户消息到历史记录
       final userMessage = RtcAigcMessage(
@@ -275,11 +258,6 @@ class AigcClient {
 
   /// 取消AI响应（打断）
   Future<bool> cancelResponse() async {
-    if (!_isConnected) {
-      debugPrint('[AigcClient] 未连接，无法取消响应');
-      return false;
-    }
-
     try {
       // 发送中断命令
       final params = {
@@ -326,7 +304,6 @@ class AigcClient {
     String? welcomeMessage,
   }) async {
     try {
-      _isConnected = true;
       // 使用与Web Demo一致的参数结构
       final Map<String, dynamic> params = config.toJson();
       debugPrint('[AigcClient] 开始语音对话: $params');
@@ -341,7 +318,6 @@ class AigcClient {
 
       return result;
     } catch (e) {
-      _isConnected = false;
       _setState(AigcClientState.error);
       rethrow;
     }
