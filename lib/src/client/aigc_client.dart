@@ -199,7 +199,6 @@ class AigcClient {
       final result = await stopVoiceChat();
 
       _setState(AigcClientState.initial);
-
       // 对于特定响应格式，我们需要更灵活地处理
       if (result.containsKey('Result')) {
         return true;

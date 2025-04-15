@@ -1228,7 +1228,7 @@ class RtcService {
   }
 
   /// 获取设备权限
-  /// 
+  ///
   /// 向用户请求音频和/或视频设备的访问权限
   /// @param options 请求选项，包含audio和video布尔值
   /// @return 权限获取结果
@@ -1239,21 +1239,21 @@ class RtcService {
     try {
       if (!_checkInitialized()) {
         return {
-          'success': false, 
-          'audio': false, 
-          'video': false, 
+          'success': false,
+          'audio': false,
+          'video': false,
           'error': 'RTC服务未初始化'
         };
       }
 
       debugPrint('【RTC服务】请求设备权限: video=$video, audio=$audio');
-      
+
       // 委托给设备管理器处理
       final result = await _deviceManager.enableDevices(
         video: video,
         audio: audio,
       );
-      
+
       return result;
     } catch (e) {
       debugPrint('【RTC服务】请求设备权限时发生错误: $e');
@@ -1267,18 +1267,16 @@ class RtcService {
   }
 
   /// 枚举所有媒体设备
-  /// 
+  ///
   /// 获取系统中所有可用的媒体输入和输出设备列表
   /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
   /// 推荐在调用enableDevices获取权限后使用本方法
-  /// 
+  ///
   /// @return 所有媒体设备的列表
   Future<List<Map<String, dynamic>>> enumerateDevices() async {
     try {
       if (!_checkInitialized()) return [];
 
-      debugPrint('【RTC服务】枚举所有媒体设备');
-      
       // 委托给设备管理器处理
       return await _deviceManager.enumerateDevices();
     } catch (e) {
@@ -1324,7 +1322,11 @@ class RtcService {
       _userLeaveController.close();
       _userStartAudioCaptureController.close();
       _userStopAudioCaptureController.close();
-
+      // 销毁引擎
+      if (_engineManager != null) {
+        _engineManager.dispose();
+        _aigcClient = null;
+      }
       _isDisposed = true;
     } catch (e) {
       debugPrint('【RTC服务】销毁时发生错误: $e');

@@ -10,7 +10,10 @@ import 'package:flutter/services.dart';
 
 /// Web utilities for handling JavaScript interop and resource loading
 class WebUtils {
-  static const String sdkAssetPath = 'sdk/volengine_Web_4.66.1.js';
+  // 使用火山引擎CDN地址替代本地SDK路径
+  static const String sdkCdnUrl =
+      'https://lf-unpkg.volccdn.com/obj/vcloudfe/sdk/@volcengine/rtc/4.66.1/1741254642340/volengine_Web_4.66.1.js';
+  static const String sdkAssetPath = 'sdk/volengine_Web_4.66.1.js'; // 保留作为备选
 
   // SDK加载状态追踪
   static bool _isLoadingSDK = false;
@@ -50,28 +53,44 @@ class WebUtils {
   static Future<void> _loadVERTCScripts() async {
     debugPrint('开始加载RTC SDK...');
 
-    // 方法1: 通过script标签加载
+    // 方法1: 通过script标签从CDN加载
+    try {
+      debugPrint('从CDN加载SDK: $sdkCdnUrl');
+      await _loadScriptByTag(sdkCdnUrl);
+
+      // 验证加载结果
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (js.context.hasProperty('VERTC')) {
+        debugPrint('SDK从CDN加载成功');
+        return;
+      }
+    } catch (e) {
+      debugPrint('从CDN加载失败: $e, 尝试备选方法');
+      // 继续尝试下一种方法
+    }
+
+    // 方法2: 尝试从本地资源加载(作为备选)
     try {
       final sdkUrl = await _getAssetUrl(sdkAssetPath);
       if (sdkUrl == null) {
         throw Exception('无法解析资源URL: $sdkAssetPath');
       }
 
-      debugPrint('通过script标签加载SDK: $sdkUrl');
+      debugPrint('尝试从本地资源加载SDK: $sdkUrl');
       await _loadScriptByTag(sdkUrl);
 
       // 验证加载结果
       await Future.delayed(const Duration(milliseconds: 300));
       if (js.context.hasProperty('VERTC')) {
-        debugPrint('SDK加载成功 (方法1)');
+        debugPrint('SDK从本地资源加载成功');
         return;
       }
     } catch (e) {
-      debugPrint('方法1加载失败: $e');
+      debugPrint('从本地资源加载失败: $e');
       // 继续尝试下一种方法
     }
 
-    // 方法2: 预加载内容然后注入
+    // 方法3: 预加载内容然后注入
     try {
       final sdkUrl = await _getAssetUrl(sdkAssetPath);
       if (sdkUrl != null) {
@@ -881,10 +900,10 @@ class WebUtils {
   }
 
   /// 请求设备权限
-  /// 
+  ///
   /// 向用户请求音频和/或视频设备的访问权限
   /// @param video 是否请求视频设备权限
-  /// @param audio 是否请求音频设备权限  
+  /// @param audio 是否请求音频设备权限
   /// @return 权限获取结果，包含audio和video两个权限的状态
   static Future<Map<String, dynamic>> enableDevices({
     bool video = false,
@@ -897,26 +916,25 @@ class WebUtils {
       }
 
       debugPrint('请求设备权限: 视频=$video, 音频=$audio');
-      
+
       // 从全局作用域获取VERTC对象
       final vertcObj = getProperty(js_util.globalThis, 'VERTC');
       if (vertcObj == null) {
         throw Exception('VERTC对象未在全局作用域中找到');
       }
-      
+
       // 使用SDK的设备管理方法获取权限
-      final result = await js_util.promiseToFuture(
-        js_util.callMethod(vertcObj, 'enableDevices', [
-          js_util.jsify({
-            'video': video,
-            'audio': audio,
-          })
-        ])
-      );
-      
+      final result = await js_util
+          .promiseToFuture(js_util.callMethod(vertcObj, 'enableDevices', [
+        js_util.jsify({
+          'video': video,
+          'audio': audio,
+        })
+      ]));
+
       // 转换结果为Dart对象 - 创建新的Map以避免类型转换问题
       final Map<String, dynamic> dartResult = {};
-      
+
       if (result != null) {
         final jsResult = js_util.dartify(result);
         if (jsResult is Map) {
@@ -928,10 +946,10 @@ class WebUtils {
           });
         }
       }
-      
+
       // 调试输出
       debugPrint('设备权限请求结果: $dartResult');
-      
+
       return dartResult;
     } catch (e) {
       debugPrint('请求设备权限失败: $e');
@@ -945,10 +963,10 @@ class WebUtils {
   }
 
   /// 枚举所有媒体设备
-  /// 
+  ///
   /// 获取系统中所有可用的媒体输入和输出设备
   /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
-  /// 
+  ///
   /// @return 所有可用的媒体设备列表
   static Future<List<dynamic>> enumerateDevices() async {
     try {
@@ -956,34 +974,31 @@ class WebUtils {
       if (!isSdkLoaded()) {
         await waitForSdkLoaded();
       }
-      
+
       // 从全局作用域获取VERTC对象
       final vertcObj = getProperty(js_util.globalThis, 'VERTC');
       if (vertcObj == null) {
         throw Exception('VERTC对象未在全局作用域中找到');
       }
-      
+
       // 调用SDK方法枚举设备
       final devices = await js_util.promiseToFuture(
-        js_util.callMethod(vertcObj, 'enumerateDevices', [])
-      );
-      
+          js_util.callMethod(vertcObj, 'enumerateDevices', []));
+
       // 记录设备数量
       if (devices != null) {
         final length = getProperty(devices, 'length') ?? 0;
-        debugPrint('枚举到 $length 个媒体设备');
-        
+
         // 可以在调试模式下输出设备详情
         if (kDebugMode && length > 0) {
           for (int i = 0; i < length; i++) {
             final device = js_util.getProperty(devices, i);
             final kind = js_util.getProperty(device, 'kind') ?? 'unknown';
             final label = js_util.getProperty(device, 'label') ?? '(无标签)';
-            debugPrint('设备[$i]: 类型=$kind, 标签=$label');
           }
         }
       }
-      
+
       return devices ?? [];
     } catch (e) {
       debugPrint('枚举设备失败: $e');
