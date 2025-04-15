@@ -880,122 +880,113 @@ class WebUtils {
     debugPrint('设备列表缓存已刷新');
   }
 
-  /// 向用户获取设备权限
-  ///
-  /// 参数:
-  ///   options: 可选参数，指定需要获取权限的设备类型
-  ///     - video: 是否获取视频设备权限
-  ///     - audio: 是否获取音频设备权限
-  ///
-  /// 返回值:
-  ///   Promise对象，解析为包含以下字段的对象:
-  ///     - video: 是否获得视频设备权限
-  ///     - audio: 是否获得音频设备权限
-  ///     - videoExceptionError: 获取视频设备权限报错信息
-  ///     - audioExceptionError: 获取音频设备权限报错信息
+  /// 请求设备权限
+  /// 
+  /// 向用户请求音频和/或视频设备的访问权限
+  /// @param video 是否请求视频设备权限
+  /// @param audio 是否请求音频设备权限  
+  /// @return 权限获取结果，包含audio和video两个权限的状态
   static Future<Map<String, dynamic>> enableDevices({
     bool video = false,
     bool audio = true,
   }) async {
-    final result = <String, dynamic>{
-      'video': false,
-      'audio': false,
-    };
-
     try {
-      debugPrint('请求设备权限: video=$video, audio=$audio');
+      // 确保SDK已加载
+      if (!isSdkLoaded()) {
+        await waitForSdkLoaded();
+      }
 
-      // 准备媒体约束
-      final constraints = <String, dynamic>{};
-      if (audio) constraints['audio'] = true;
-      if (video) constraints['video'] = true;
-
-      // 调用浏览器getUserMedia API
-      final stream = await callGlobalMethodAsync(
-        'navigator.mediaDevices.getUserMedia',
-        [js_util.jsify(constraints)],
+      debugPrint('请求设备权限: 视频=$video, 音频=$audio');
+      
+      // 从全局作用域获取VERTC对象
+      final vertcObj = getProperty(js_util.globalThis, 'VERTC');
+      if (vertcObj == null) {
+        throw Exception('VERTC对象未在全局作用域中找到');
+      }
+      
+      // 使用SDK的设备管理方法获取权限
+      final result = await js_util.promiseToFuture(
+        js_util.callMethod(vertcObj, 'enableDevices', [
+          js_util.jsify({
+            'video': video,
+            'audio': audio,
+          })
+        ])
       );
-
-      if (stream != null) {
-        // 检查获取的权限
-        if (audio) {
-          final audioTracks = js_util.callMethod(stream, 'getAudioTracks', []);
-          result['audio'] = js_util.getProperty(audioTracks, 'length') > 0;
+      
+      // 转换结果为Dart对象 - 创建新的Map以避免类型转换问题
+      final Map<String, dynamic> dartResult = {};
+      
+      if (result != null) {
+        final jsResult = js_util.dartify(result);
+        if (jsResult is Map) {
+          // 复制键值对到我们的Map中，确保键是字符串
+          jsResult.forEach((key, value) {
+            if (key != null) {
+              dartResult[key.toString()] = value;
+            }
+          });
         }
-
-        if (video) {
-          final videoTracks = js_util.callMethod(stream, 'getVideoTracks', []);
-          result['video'] = js_util.getProperty(videoTracks, 'length') > 0;
-        }
-
-        // 停止所有轨道，释放设备
-        final tracks = js_util.callMethod(stream, 'getTracks', []);
-        final int length = js_util.getProperty(tracks, 'length') ?? 0;
-
-        for (int i = 0; i < length; i++) {
-          final track = js_util.getProperty(tracks, i);
-          js_util.callMethod(track, 'stop', []);
-        }
-
-        debugPrint('获取设备权限成功: ${result.toString()}');
       }
+      
+      // 调试输出
+      debugPrint('设备权限请求结果: $dartResult');
+      
+      return dartResult;
     } catch (e) {
-      debugPrint('获取设备权限失败: $e');
-
-      // 确定是哪种设备的权限获取失败
-      if (e.toString().contains('audio')) {
-        result['audioExceptionError'] = e;
-      } else if (e.toString().contains('video')) {
-        result['videoExceptionError'] = e;
-      } else {
-        // 如果不能确定，两种设备都记录错误
-        if (audio) result['audioExceptionError'] = e;
-        if (video) result['videoExceptionError'] = e;
-      }
+      debugPrint('请求设备权限失败: $e');
+      return {
+        'audio': false,
+        'video': false,
+        'audioExceptionError': e.toString(),
+        'videoExceptionError': e.toString(),
+      };
     }
-
-    // 权限获取后，重新枚举设备列表
-    await refreshDeviceCaches();
-
-    return result;
   }
 
-  /// 枚举可用的媒体输入和输出设备，比如麦克风、摄像头、耳机等
-  ///
-  /// 注意: 浏览器只有在已经获得设备权限时，才能准确获取设备信息。
-  /// 建议通过 enableDevices 访问授权后调用本接口。
-  ///
-  /// 返回值: 媒体设备列表 (MediaDeviceInfo[])
+  /// 枚举所有媒体设备
+  /// 
+  /// 获取系统中所有可用的媒体输入和输出设备
+  /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
+  /// 
+  /// @return 所有可用的媒体设备列表
   static Future<List<dynamic>> enumerateDevices() async {
     try {
-      debugPrint('枚举所有媒体设备');
-
-      // 调用浏览器API
-      final devices = await callGlobalMethodAsync(
-        'navigator.mediaDevices.enumerateDevices',
-        [],
+      // 确保SDK已加载
+      if (!isSdkLoaded()) {
+        await waitForSdkLoaded();
+      }
+      
+      // 从全局作用域获取VERTC对象
+      final vertcObj = getProperty(js_util.globalThis, 'VERTC');
+      if (vertcObj == null) {
+        throw Exception('VERTC对象未在全局作用域中找到');
+      }
+      
+      // 调用SDK方法枚举设备
+      final devices = await js_util.promiseToFuture(
+        js_util.callMethod(vertcObj, 'enumerateDevices', [])
       );
-
+      
+      // 记录设备数量
       if (devices != null) {
-        final length = js_util.getProperty(devices, 'length') ?? 0;
-        debugPrint('获取到 $length 个媒体设备');
-
-        // 打印设备列表帮助调试（在生产环境可以移除）
+        final length = getProperty(devices, 'length') ?? 0;
+        debugPrint('枚举到 $length 个媒体设备');
+        
+        // 可以在调试模式下输出设备详情
         if (kDebugMode && length > 0) {
           for (int i = 0; i < length; i++) {
             final device = js_util.getProperty(devices, i);
-            final kind = js_util.getProperty(device, 'kind') ?? '';
+            final kind = js_util.getProperty(device, 'kind') ?? 'unknown';
             final label = js_util.getProperty(device, 'label') ?? '(无标签)';
-            final deviceId = js_util.getProperty(device, 'deviceId') ?? '';
+            debugPrint('设备[$i]: 类型=$kind, 标签=$label');
           }
         }
-
-        return devices;
       }
-
-      return [];
+      
+      return devices ?? [];
     } catch (e) {
-      debugPrint('枚举媒体设备失败: $e');
+      debugPrint('枚举设备失败: $e');
       return [];
     }
   }

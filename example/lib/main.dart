@@ -87,7 +87,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     setState(() {
       _status = '正在初始化...';
     });
-    
+
     try {
       final aigcConfig = AigcConfig(
         appId: "67b5aec82b4ee7020146d3b5",
@@ -134,16 +134,17 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         });
 
         _setupSubscriptions();
-        
+
         // 请求麦克风访问权限
         final permissionResult = await RtcAigcPlugin.enableDevices(audio: true);
         if (permissionResult['audio'] == true) {
           _addSystemMessage('已获取麦克风权限');
-          
+
           // 枚举设备
           await _listDevices();
         } else {
-          _addSystemMessage('获取麦克风权限失败: ${permissionResult['audioExceptionError'] ?? "未知错误"}');
+          _addSystemMessage(
+              '获取麦克风权限失败: ${permissionResult['audioExceptionError'] ?? "未知错误"}');
         }
       } else {
         setState(() {
@@ -534,14 +535,15 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   // 列出可用设备
   Future<void> _listDevices() async {
     try {
+      await RtcAigcPlugin.enableDevices();
       final devices = await RtcAigcPlugin.enumerateDevices();
       if (devices.isNotEmpty) {
         _addSystemMessage('发现 ${devices.length} 个媒体设备');
-        
+
         // 分类设备
         List<Map<String, dynamic>> audioInputs = [];
         List<Map<String, dynamic>> audioOutputs = [];
-        
+
         for (var device in devices) {
           final kind = device['kind'] ?? '';
           if (kind == 'audioinput') {
@@ -550,11 +552,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             audioOutputs.add(device);
           }
         }
-        
+
         if (audioInputs.isNotEmpty) {
           _addSystemMessage('麦克风设备: ${audioInputs.length} 个');
         }
-        
+
         if (audioOutputs.isNotEmpty) {
           _addSystemMessage('扬声器设备: ${audioOutputs.length} 个');
         }

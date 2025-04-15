@@ -332,11 +332,8 @@ LlmConfig llmConfigFromJson(String str) => LlmConfig.fromJson(json.decode(str));
 String llmConfigToJson(LlmConfig data) => json.encode(data.toJson());
 
 class LlmConfig {
-  LlmConfig({
-    this.mode,
-    this.endPointId,
-    this.visionConfig,
-  });
+  LlmConfig(
+      {this.mode, this.endPointId, this.visionConfig, this.systemMessages});
 
   LlmConfig.fromJson(dynamic json) {
     mode = json['Mode'];
@@ -344,20 +341,25 @@ class LlmConfig {
     visionConfig = json['VisionConfig'] != null
         ? VisionConfig.fromJson(json['VisionConfig'])
         : null;
+    systemMessages = json['systemMessages'] != null
+        ? json['systemMessages'].cast<String>()
+        : null;
   }
   String? mode;
   String? endPointId;
   VisionConfig? visionConfig;
+  List<String>? systemMessages;
   LlmConfig copyWith({
     String? mode,
     String? endPointId,
     VisionConfig? visionConfig,
+    List<String>? systemMessages,
   }) =>
       LlmConfig(
-        mode: mode ?? this.mode,
-        endPointId: endPointId ?? this.endPointId,
-        visionConfig: visionConfig ?? this.visionConfig,
-      );
+          mode: mode ?? this.mode,
+          endPointId: endPointId ?? this.endPointId,
+          visionConfig: visionConfig ?? this.visionConfig,
+          systemMessages: systemMessages ?? this.systemMessages);
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{};
     map['Mode'] = mode;
@@ -365,6 +367,8 @@ class LlmConfig {
     if (visionConfig != null) {
       map['VisionConfig'] = visionConfig?.toJson();
     }
+    map['systemMessages'] = systemMessages;
+
     return map;
   }
 }
