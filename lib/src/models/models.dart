@@ -140,41 +140,45 @@ class RtcAigcMessage {
   final MessageType type;
 
   /// 消息内容
-  final String? text;
+  final String text;
 
   /// 发送者ID
   final String? senderId;
 
   /// 是否为用户消息
-  final bool? isUser;
+  final bool isUser;
 
   /// 是否被中断
   final bool isInterrupted;
 
   /// 消息时间戳
-  final int? timestamp;
+  int? timestamp = DateTime.now().millisecondsSinceEpoch;
 
-  /// Function call details (if type is functionCall)
-  final FunctionCall? functionCall;
+  /// 函数调用名称 (如果是函数调用)
+  final String? functionName;
 
-  /// Function return details (if type is functionReturn)
-  final FunctionReturn? functionReturn;
+  /// 函数调用参数 (如果是函数调用)
+  final Map<String, dynamic>? functionArguments;
 
-  /// Status message (if type is status)
+  /// 状态信息 (如果是状态消息)
   final String? status;
+
+  /// 对于字幕，是否是最终字幕
+  final bool isFinal;
 
   /// 构造函数
   RtcAigcMessage({
     required this.id,
     required this.type,
-    this.text,
+    this.text = '',
     this.senderId,
-    this.isUser,
+    this.isUser = false,
     this.isInterrupted = false,
     this.timestamp,
-    this.functionCall,
-    this.functionReturn,
+    this.functionName,
+    this.functionArguments,
     this.status,
+    this.isFinal = false,
   });
 
   /// 用于创建文本消息的工厂方法
@@ -182,16 +186,20 @@ class RtcAigcMessage {
     required String id,
     required String text,
     required bool isUser,
-    String? senderId,
     int? timestamp,
+    String? senderId,
+    bool isInterrupted = false,
+    bool isFinal = false,
   }) {
     return RtcAigcMessage(
       id: id,
-      type: MessageType.text,
-      text: text,
+      type: isUser ? MessageType.user : MessageType.ai,
       senderId: senderId,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      text: text,
+      isInterrupted: isInterrupted,
+      isFinal: isFinal,
       isUser: isUser,
-      timestamp: timestamp,
     );
   }
 
@@ -208,7 +216,9 @@ class RtcAigcMessage {
       text: text,
       senderId: senderId,
       isUser: true,
-      timestamp: timestamp,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -225,7 +235,9 @@ class RtcAigcMessage {
       text: text,
       senderId: senderId,
       isUser: false,
-      timestamp: timestamp,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -241,7 +253,9 @@ class RtcAigcMessage {
       text: text,
       senderId: null,
       isUser: false,
-      timestamp: timestamp,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -257,7 +271,9 @@ class RtcAigcMessage {
       text: text,
       senderId: null,
       isUser: false,
-      timestamp: timestamp,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -266,18 +282,20 @@ class RtcAigcMessage {
     required String id,
     required String name,
     required Map<String, dynamic> arguments,
-    bool isUser = false,
-    int? timestamp,
+    required int timestamp,
+    String? senderId,
   }) {
     return RtcAigcMessage(
       id: id,
       type: MessageType.functionCall,
-      functionCall: FunctionCall(
-        name: name,
-        arguments: arguments,
-      ),
-      isUser: isUser,
+      text: '函数调用: $name',
+      senderId: senderId,
+      isUser: false,
       timestamp: timestamp,
+      functionName: name,
+      functionArguments: arguments,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -292,12 +310,12 @@ class RtcAigcMessage {
     return RtcAigcMessage(
       id: id,
       type: MessageType.functionReturn,
-      functionReturn: FunctionReturn(
-        callId: callId,
-        result: result,
-      ),
+      text: '函数返回: $callId',
+      senderId: null,
       isUser: isUser,
-      timestamp: timestamp,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -305,15 +323,18 @@ class RtcAigcMessage {
   factory RtcAigcMessage.status({
     required String id,
     required String status,
-    bool isUser = false,
-    int? timestamp,
+    required int timestamp,
+    String? senderId,
   }) {
     return RtcAigcMessage(
       id: id,
       type: MessageType.status,
-      status: status,
-      isUser: isUser,
+      text: '状态: $status',
+      senderId: senderId,
       timestamp: timestamp,
+      status: status,
+      isInterrupted: false,
+      isFinal: false,
     );
   }
 
@@ -327,10 +348,9 @@ class RtcAigcMessage {
           id: json['id'] as String,
           text: json['text'] as String,
           isUser: json['isUser'] as bool? ?? false,
-          senderId: json['senderId'] as String?,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.user:
         return RtcAigcMessage.user(
@@ -339,7 +359,7 @@ class RtcAigcMessage {
           senderId: json['senderId'] as String?,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.ai:
         return RtcAigcMessage.ai(
@@ -348,7 +368,7 @@ class RtcAigcMessage {
           senderId: json['senderId'] as String?,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.functionCall:
         final functionCallJson = json['functionCall'] as Map<String, dynamic>?;
@@ -359,10 +379,10 @@ class RtcAigcMessage {
           id: json['id'] as String,
           name: functionCallJson['name'] as String,
           arguments: functionCallJson['arguments'] as Map<String, dynamic>,
-          isUser: json['isUser'] as bool? ?? false,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
+          senderId: json['senderId'] as String?,
         );
       case MessageType.functionReturn:
         final functionReturnJson =
@@ -377,16 +397,16 @@ class RtcAigcMessage {
           isUser: json['isUser'] as bool? ?? false,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.status:
         return RtcAigcMessage.status(
           id: json['id'] as String,
           status: json['status'] as String,
-          isUser: json['isUser'] as bool? ?? false,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
+          senderId: json['senderId'] as String?,
         );
       case MessageType.system:
         return RtcAigcMessage.system(
@@ -394,7 +414,7 @@ class RtcAigcMessage {
           text: json['text'] as String,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.error:
         return RtcAigcMessage.error(
@@ -402,7 +422,7 @@ class RtcAigcMessage {
           text: json['text'] as String,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
+              : DateTime.now().millisecondsSinceEpoch,
         );
       case MessageType.unknown:
       default:
@@ -410,16 +430,17 @@ class RtcAigcMessage {
           id: json['id'] as String? ??
               DateTime.now().millisecondsSinceEpoch.toString(),
           type: MessageType.unknown,
-          text: json['text'] as String?,
+          text: json['text'] as String? ?? '',
           senderId: json['senderId'] as String?,
-          isUser: json['isUser'] as bool? ?? false,
+          isUser: false,
           isInterrupted: false,
           timestamp: json['timestamp'] != null
               ? int.parse(json['timestamp'] as String)
-              : null,
-          functionCall: null,
-          functionReturn: null,
+              : DateTime.now().millisecondsSinceEpoch,
+          functionName: null,
+          functionArguments: null,
           status: null,
+          isFinal: false,
         );
     }
   }
@@ -445,16 +466,19 @@ class RtcAigcMessage {
       json['isInterrupted'] = isInterrupted;
     }
 
-    if (functionCall != null) {
-      json['functionCall'] = functionCall!.toJson();
-    }
-
-    if (functionReturn != null) {
-      json['functionReturn'] = functionReturn!.toJson();
+    if (functionName != null && functionArguments != null) {
+      json['functionCall'] = {
+        'name': functionName,
+        'arguments': functionArguments,
+      };
     }
 
     if (status != null) {
       json['status'] = status;
+    }
+
+    if (isFinal) {
+      json['isFinal'] = isFinal;
     }
 
     return json;
@@ -469,9 +493,10 @@ class RtcAigcMessage {
     bool? isUser,
     bool? isInterrupted,
     int? timestamp,
-    FunctionCall? functionCall,
-    FunctionReturn? functionReturn,
+    String? functionName,
+    Map<String, dynamic>? functionArguments,
     String? status,
+    bool? isFinal,
   }) {
     return RtcAigcMessage(
       id: id ?? this.id,
@@ -481,15 +506,16 @@ class RtcAigcMessage {
       isUser: isUser ?? this.isUser,
       isInterrupted: isInterrupted ?? this.isInterrupted,
       timestamp: timestamp ?? this.timestamp,
-      functionCall: functionCall ?? this.functionCall,
-      functionReturn: functionReturn ?? this.functionReturn,
+      functionName: functionName ?? this.functionName,
+      functionArguments: functionArguments ?? this.functionArguments,
       status: status ?? this.status,
+      isFinal: isFinal ?? this.isFinal,
     );
   }
 
   @override
   String toString() {
-    return 'RtcAigcMessage{id: $id, type: $type, text: $text, senderId: $senderId, isUser: $isUser, isInterrupted: $isInterrupted, timestamp: $timestamp, functionCall: $functionCall, functionReturn: $functionReturn, status: $status}';
+    return 'RtcAigcMessage{id: $id, type: $type, text: $text, senderId: $senderId, isUser: $isUser, isInterrupted: $isInterrupted, timestamp: $timestamp, functionName: $functionName, functionArguments: $functionArguments, status: $status, isFinal: $isFinal}';
   }
 
   /// Convert message type to string

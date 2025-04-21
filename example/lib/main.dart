@@ -122,7 +122,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
 
       final success = await RtcAigcPlugin.initialize(
-        baseUrl: "http://8.134.220.112:32344",
+        baseUrl: "https://doubao.ifeng.tech",
         config: aigcConfig,
         appKey: '9f35c7d69dda4e119edcd64be9bf5142',
       );
@@ -730,10 +730,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
   // 构建消息项
   Widget _buildMessageItem(RtcAigcMessage message) {
-    final isUser = message.isUser ?? false;
+    final isUser = message.isUser;
     final isSystem = message.type == MessageType.system;
     final isTemporarySubtitle =
         !isUser && _pendingSubtitleIds.contains(message.id);
+    final isFinal = message.isFinal;
 
     // 系统消息样式
     if (isSystem) {
@@ -748,7 +749,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             borderRadius: BorderRadius.circular(16.0),
           ),
           child: Text(
-            message.text ?? '',
+            message.text,
             style: const TextStyle(color: Colors.white, fontSize: 12.0),
           ),
         ),
@@ -768,11 +769,13 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         decoration: BoxDecoration(
           color: isUser
               ? Colors.blue.shade100
-              : (isTemporarySubtitle ? Colors.grey.shade100 : Colors.white),
+              : (isTemporarySubtitle
+                  ? Colors.grey.shade100
+                  : (isFinal ? Colors.green.shade50 : Colors.white)),
           borderRadius: BorderRadius.circular(12.0),
           border: isTemporarySubtitle
-              ? Border.all(color: Colors.blue.shade200)
-              : null,
+              ? Border.all(color: Colors.blue.shade200, width: 0.5)
+              : (isFinal ? Border.all(color: Colors.green.shade200) : null),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -801,6 +804,32 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
                         isUser ? Colors.blue.shade700 : Colors.green.shade700,
                   ),
                 ),
+                if (!isUser) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isTemporarySubtitle
+                          ? Colors.grey.shade200
+                          : (isFinal
+                              ? Colors.green.shade100
+                              : Colors.blue.shade100),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      isTemporarySubtitle ? "输入中" : (isFinal ? "最终回复" : "临时回复"),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isTemporarySubtitle
+                            ? Colors.grey.shade700
+                            : (isFinal
+                                ? Colors.green.shade700
+                                : Colors.blue.shade700),
+                      ),
+                    ),
+                  ),
+                ],
                 if (isTemporarySubtitle) ...[
                   const SizedBox(width: 4),
                   SizedBox(
@@ -816,7 +845,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             ),
             const SizedBox(height: 4),
             Text(
-              message.text ?? '',
+              message.text,
               style: TextStyle(
                 fontStyle:
                     isTemporarySubtitle ? FontStyle.italic : FontStyle.normal,

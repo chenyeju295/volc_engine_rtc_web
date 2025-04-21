@@ -167,7 +167,7 @@ class RtcMessageHandler {
 
       // 处理解析结果
       if (parsedData != null) {
-        _processTextOrJson(parsedData);
+        processTextOrJson(parsedData);
       } else {
         // 最后尝试作为原始字符串尝试查找 status 等字段
         if (!isSubtitle) {
@@ -188,7 +188,7 @@ class RtcMessageHandler {
                               : "UNKNOWN",
               'timestamp': DateTime.now().millisecondsSinceEpoch
             };
-            _processTextOrJson(stateMessage);
+            processTextOrJson(stateMessage);
           } else {
             debugPrint('【消息处理器】消息无法解析为任何已知格式');
           }
@@ -201,7 +201,7 @@ class RtcMessageHandler {
   }
 
   /// 处理文本或JSON消息
-  void _processTextOrJson(Map<String, dynamic> data) {
+  void processTextOrJson(Map<String, dynamic> data) {
     try {
       final type = data['type']?.toString().toLowerCase();
 
@@ -305,15 +305,25 @@ class RtcMessageHandler {
         debugPrint('【字幕】最终字幕: $subtitleText');
       }
 
-      // 提取字幕内容 - 这部分保持不变，正常处理所有字幕
-      final textData = data['text'];
-      if (textData != null) {
+      // 处理两种可能的数据格式:
+      // 1. 'text' 字段直接在主数据中
+      // 2. 'text' 字段在 'data' 中的第一项
+      String? textData = data['text'];
+      if (textData == null && subtitleText.isNotEmpty) {
+        textData = subtitleText;
+      }
+
+      if (textData != null && textData.isNotEmpty) {
         final subtitle = {
           'text': textData,
           'isFinal': isDefiniteSubtitle, // 确保isFinal标记传递正确
           'timestamp': DateTime.now().millisecondsSinceEpoch,
         };
 
+        // 发送字幕到订阅者
+        _subtitleController.add(subtitle);
+
+        // 如果设置了回调，也发送到回调
         if (onSubtitle != null) {
           onSubtitle!(subtitle);
         }
@@ -324,7 +334,15 @@ class RtcMessageHandler {
           text: textData,
           isUser: false,
           timestamp: DateTime.now().millisecondsSinceEpoch,
+          isFinal: isDefiniteSubtitle,
         ));
+
+        // 调试缓存信息
+        if (isDefiniteSubtitle) {
+          debugPrint('【字幕缓存】添加最终字幕到历史记录: $textData');
+        }
+      } else {
+        debugPrint('【字幕】收到空字幕或无法解析字幕内容');
       }
     } catch (e) {
       debugPrint('【消息处理器】处理字幕消息异常: $e');

@@ -51,9 +51,9 @@
     },
     {
       "name": "flutter_lints",
-      "rootUri": "file:///Users/chenyeju/.pub-cache/hosted/pub.flutter-io.cn/flutter_lints-2.0.3",
+      "rootUri": "file:///Users/chenyeju/.pub-cache/hosted/pub.flutter-io.cn/flutter_lints-5.0.0",
       "packageUri": "lib/",
-      "languageVersion": "2.19"
+      "languageVersion": "3.5"
     },
     {
       "name": "flutter_test",
@@ -99,9 +99,9 @@
     },
     {
       "name": "lints",
-      "rootUri": "file:///Users/chenyeju/.pub-cache/hosted/pub.flutter-io.cn/lints-2.1.1",
+      "rootUri": "file:///Users/chenyeju/.pub-cache/hosted/pub.flutter-io.cn/lints-5.1.1",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.6"
     },
     {
       "name": "matcher",
@@ -200,7 +200,7 @@
       "languageVersion": "3.0"
     }
   ],
-  "generated": "2025-04-15T06:06:26.703032Z",
+  "generated": "2025-04-18T10:31:46.613589Z",
   "generator": "pub",
   "generatorVersion": "3.6.2",
   "flutterRoot": "file:///Users/chenyeju/fvm/versions/3.27.4",

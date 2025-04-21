@@ -325,7 +325,6 @@ class RtcService {
             DateTime.now().millisecondsSinceEpoch.toString(),
         name: functionCall['name'] ?? '',
         arguments: functionCall['arguments'] ?? {},
-        isUser: false,
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
       _addMessage(functionCallMessage);

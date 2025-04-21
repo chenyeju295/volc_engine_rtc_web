@@ -775,21 +775,51 @@ class RtcEventManager {
   }
 
   void _handleSubtitleMessageReceived(dynamic event) {
-    // 只在字幕为最终状态时输出日志
     try {
       final userId = js_util.getProperty(event, 'userId') ?? '';
       final text = js_util.getProperty(event, 'text') ?? '';
       final isFinal = js_util.getProperty(event, 'isFinal') ?? false;
 
-      // 只有最终字幕才输出日志
-      if (isFinal && text.isNotEmpty) {
-        debugPrint('【字幕】RTC最终字幕: $text');
+      // 只有最终字幕或非空字幕才输出日志
+      if ((isFinal || text.trim().isNotEmpty) && text.length > 1) {
+        debugPrint('【字幕】RTC字幕: ${isFinal ? "最终" : "中间"}: $text');
       }
 
-      // 发送字幕文本
-      _subtitleController.add(text);
+      // 创建字幕数据
+      final subtitleData = {
+        'userId': userId,
+        'text': text,
+        'isFinal': isFinal,
+        'timestamp': DateTime.now().millisecondsSinceEpoch
+      };
 
-      // 发送详细信息
+      // 发送字幕数据给订阅者
+      _subtitleController.add(subtitleData);
+      
+      // 同时发送到消息处理器，确保两个系统保持同步
+      if (_messageHandler != null && text.isNotEmpty) {
+        try {
+          // 创建与消息处理器兼容的字幕消息格式
+          final subtitleMessage = {
+            'type': 'subv',
+            'text': text,
+            'data': [
+              {
+                'text': text,
+                'definite': isFinal,
+                'paragraph': isFinal
+              }
+            ]
+          };
+          
+          // 让消息处理器处理这个消息
+          _messageHandler.processTextOrJson(subtitleMessage);
+        } catch (e) {
+          debugPrint('【事件系统】转发字幕到消息处理器失败: $e');
+        }
+      }
+
+      // 发送详细信息到状态流
       _stateController.add({
         'type': 'subtitle_message',
         'userId': userId,

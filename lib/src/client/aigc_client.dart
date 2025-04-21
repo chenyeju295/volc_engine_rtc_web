@@ -234,7 +234,6 @@ class AigcClient {
         'TaskId': config.taskId,
         'Command': COMMAND.interrupt.toString(),
         'Message': text,
-        "InterruptMode": 1
       };
 
       final result = await _post(
@@ -301,16 +300,39 @@ class AigcClient {
   Future<Map<String, dynamic>> startVoiceChat({
     String? businessId,
     String? welcomeMessage,
+    bool isRetry = false,
   }) async {
     try {
       // 使用与Web Demo一致的参数结构
       final Map<String, dynamic> params = config.toJson();
       debugPrint('[AigcClient] 开始语音对话: $params');
+
       final result = await _post(
         action: ActionType.startVoiceChat,
         name: 'start',
         params: params,
       );
+
+      // 检查是否返回"任务已启动"的消息，需要先停止再重试
+      if (!isRetry &&
+          result.containsKey('Result') &&
+          result['Result'] is String &&
+          (result['Result'] as String).contains('The task has been started')) {
+        debugPrint('[AigcClient] 检测到任务已启动，尝试先停止再重试');
+
+        // 先停止当前任务
+        await stopVoiceChat();
+
+        // 短暂延迟，确保服务器有时间处理停止请求
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // 重试启动
+        return startVoiceChat(
+          businessId: businessId,
+          welcomeMessage: welcomeMessage,
+          isRetry: true,
+        );
+      }
 
       // 如果成功启动，则更新状态为就绪
       _setState(AigcClientState.ready);
@@ -323,11 +345,13 @@ class AigcClient {
   }
 
   /// 更新语音对话
-  Future<Map<String, dynamic>> updateVoiceChat() async {
+  Future<Map<String, dynamic>> updateVoiceChat(
+      {required String Message}) async {
     final Map<String, dynamic> params = {
       'AppId': config.appId,
       'RoomId': config.roomId,
       'TaskId': config.taskId,
+      'Message': Message,
       'Command': 'interrupt'
     };
 

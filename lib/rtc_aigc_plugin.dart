@@ -180,10 +180,6 @@ class RtcAigcPlugin {
   static Stream<Map<String, dynamic>> get subtitleStream =>
       _rtcService?.subtitleStream ?? const Stream<Map<String, dynamic>>.empty();
 
-  /// 用于监听字幕状态变化的流
-  static Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _rtcService?.subtitleStream ?? const Stream<Map<String, dynamic>>.empty();
-
   /// 用于监听消息历史变化的流
   static Stream<List<RtcAigcMessage>> get messageHistoryStream =>
       _rtcService?.messageHistoryStream ??
@@ -536,10 +532,10 @@ class RtcAigcPlugin {
   /// ---------- 设备权限相关方法 ----------
 
   /// 启用设备权限
-  /// 
+  ///
   /// 向用户请求音频和/或视频设备的访问权限
   /// 这是使用媒体设备前的推荐做法
-  /// 
+  ///
   /// @param video 是否请求视频设备权限
   /// @param audio 是否请求音频设备权限
   /// @return 权限请求结果
@@ -555,7 +551,7 @@ class RtcAigcPlugin {
         'error': '服务未初始化'
       };
     }
-    
+
     return await _rtcService!.enableDevices(
       video: video,
       audio: audio,
@@ -563,11 +559,11 @@ class RtcAigcPlugin {
   }
 
   /// 枚举所有媒体设备
-  /// 
+  ///
   /// 获取系统中所有可用的媒体输入和输出设备
   /// 注意：浏览器只有在已经获得设备权限时，才能准确获取设备信息
   /// 推荐在调用enableDevices获取权限后使用本方法
-  /// 
+  ///
   /// @return 所有媒体设备的列表
   static Future<List<Map<String, dynamic>>> enumerateDevices() async {
     if (_rtcService == null) return [];
@@ -575,9 +571,9 @@ class RtcAigcPlugin {
   }
 
   /// 请求麦克风访问权限
-  /// 
+  ///
   /// 向用户请求麦克风的访问权限
-  /// 
+  ///
   /// @return 是否成功获得权限
   static Future<bool> requestMicrophoneAccess() async {
     if (_rtcService == null) return false;
@@ -585,9 +581,9 @@ class RtcAigcPlugin {
   }
 
   /// 请求摄像头访问权限
-  /// 
+  ///
   /// 向用户请求摄像头的访问权限
-  /// 
+  ///
   /// @return 是否成功获得权限
   static Future<bool> requestCameraAccess() async {
     if (_rtcService == null) return false;
