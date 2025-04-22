@@ -743,3 +743,102 @@ class AudioStatusEvent {
   /// 构造函数
   AudioStatusEvent({required this.isPlaying, required this.isCapturing});
 }
+
+//
+// {definite: false, language: zh, mode: 1, paragraph: false, sequence: 249, text: 愿意的话，和我多说一说，说出来或许心里能, timestamp: 1745289846606, userId: ChatBot01}
+/// 字幕实体类
+class SubtitleEntity {
+  /// 是否确定
+  final bool? definite;
+
+  /// 语言
+  final String? language;
+
+  /// 模式
+  final int? mode;
+
+  /// 段落
+  final bool? paragraph;
+
+  /// 序列
+  final int? sequence;
+
+  /// 文本
+  final String? text;
+
+  /// 时间戳
+  final int? timestamp;
+
+  /// 用户ID
+  final String? userId;
+
+  /// 构造函数
+  SubtitleEntity({
+    this.definite,
+    this.language,
+    this.mode,
+    this.paragraph,
+    this.sequence,
+    this.text,
+    this.timestamp,
+    this.userId,
+  });
+
+  /// 从JSON创建实例
+  factory SubtitleEntity.fromJson(Map<String, dynamic> json) {
+    return SubtitleEntity(
+      definite: json['definite'] == true,
+      language: json['language'],
+      mode: json['mode'],
+      paragraph: json['paragraph'],
+      sequence: json['sequence'],
+      text: json['text'],
+      timestamp: json['timestamp'],
+      userId: json['userId'],
+    );
+  }
+
+  /// 转换为JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'definite': definite,
+      'language': language,
+      'mode': mode,
+      'paragraph': paragraph,
+      'sequence': sequence,
+      'text': text,
+      'timestamp': timestamp,
+      'userId': userId,
+    };
+  }
+
+  /// 复制并修改字幕实体
+  SubtitleEntity copyWith({
+    bool? definite,
+    String? language,
+    int? mode,
+    bool? paragraph,
+    int? sequence,
+    String? text,
+    int? timestamp,
+    String? userId,
+  }) {
+    return SubtitleEntity(
+      definite: definite ?? this.definite,
+      language: language ?? this.language,
+      mode: mode ?? this.mode,
+      paragraph: paragraph ?? this.paragraph,
+      sequence: sequence ?? this.sequence,
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+      userId: userId ?? this.userId,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'SubtitleEntity(definite: $definite, language: $language, mode: $mode, '
+        'paragraph: $paragraph, sequence: $sequence, text: $text, '
+        'timestamp: $timestamp, userId: $userId)';
+  }
+}

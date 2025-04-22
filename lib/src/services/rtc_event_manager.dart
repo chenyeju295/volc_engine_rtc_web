@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:rtc_aigc_plugin/src/services/rtc_message_handler.dart';
 import 'package:rtc_aigc_plugin/src/utils/web_utils.dart';
 
+import '../../rtc_aigc_plugin.dart';
+
 /// RTC错误类，用于表示RTC操作中发生的错误
 class RtcError {
   final int code;
@@ -94,8 +96,8 @@ class RtcEventManager {
       StreamController<Map<String, dynamic>>.broadcast();
 
   // Stream controllers for media events
-  final StreamController<Map<String, dynamic>> _subtitleController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<SubtitleEntity> _subtitleController =
+      StreamController<SubtitleEntity>.broadcast();
   final StreamController<Map<String, dynamic>> _subtitleStateController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _networkQualityController =
@@ -148,9 +150,7 @@ class RtcEventManager {
       _userPublishStreamController.stream;
   Stream<Map<String, dynamic>> get userUnpublishStreamStream =>
       _userUnpublishStreamController.stream;
-  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
-  Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _subtitleStateController.stream;
+  Stream<SubtitleEntity> get subtitleStream => _subtitleController.stream;
   Stream<Map<String, dynamic>> get networkQualityStream =>
       _networkQualityController.stream;
   Stream<Map<String, dynamic>> get functionCallStream =>
@@ -771,64 +771,6 @@ class RtcEventManager {
       _stateController.add(stateData);
     } catch (e) {
       debugPrint('处理onSubtitleStateChanged事件出错: $e');
-    }
-  }
-
-  void _handleSubtitleMessageReceived(dynamic event) {
-    try {
-      final userId = js_util.getProperty(event, 'userId') ?? '';
-      final text = js_util.getProperty(event, 'text') ?? '';
-      final isFinal = js_util.getProperty(event, 'isFinal') ?? false;
-
-      // 只有最终字幕或非空字幕才输出日志
-      if ((isFinal || text.trim().isNotEmpty) && text.length > 1) {
-        debugPrint('【字幕】RTC字幕: ${isFinal ? "最终" : "中间"}: $text');
-      }
-
-      // 创建字幕数据
-      final subtitleData = {
-        'userId': userId,
-        'text': text,
-        'isFinal': isFinal,
-        'timestamp': DateTime.now().millisecondsSinceEpoch
-      };
-
-      // 发送字幕数据给订阅者
-      _subtitleController.add(subtitleData);
-      
-      // 同时发送到消息处理器，确保两个系统保持同步
-      if (_messageHandler != null && text.isNotEmpty) {
-        try {
-          // 创建与消息处理器兼容的字幕消息格式
-          final subtitleMessage = {
-            'type': 'subv',
-            'text': text,
-            'data': [
-              {
-                'text': text,
-                'definite': isFinal,
-                'paragraph': isFinal
-              }
-            ]
-          };
-          
-          // 让消息处理器处理这个消息
-          _messageHandler.processTextOrJson(subtitleMessage);
-        } catch (e) {
-          debugPrint('【事件系统】转发字幕到消息处理器失败: $e');
-        }
-      }
-
-      // 发送详细信息到状态流
-      _stateController.add({
-        'type': 'subtitle_message',
-        'userId': userId,
-        'text': text,
-        'isFinal': isFinal,
-        'timestamp': DateTime.now().millisecondsSinceEpoch
-      });
-    } catch (e) {
-      debugPrint('处理onSubtitleMessageReceived事件出错: $e');
     }
   }
 

@@ -134,7 +134,11 @@ class RtcService {
       _audioDevicesController.stream;
 
   /// 字幕流控制器
-  final StreamController<Map<String, dynamic>> _subtitleController =
+  final StreamController<SubtitleEntity> _subtitleController =
+      StreamController<SubtitleEntity>.broadcast();
+
+  /// 字幕流控制器
+  final StreamController<Map<String, dynamic>> _subtitleStateController =
       StreamController<Map<String, dynamic>>.broadcast();
 
   /// 连接状态流控制器
@@ -247,7 +251,11 @@ class RtcService {
   Stream<bool> get audioStatusStream => _audioStatusController.stream;
 
   /// 获取字幕流
-  Stream<Map<String, dynamic>> get subtitleStream => _subtitleController.stream;
+  Stream<SubtitleEntity> get subtitleStream => _subtitleController.stream;
+
+  /// 获取字幕状态流
+  Stream<Map<String, dynamic>> get subtitleStateStream =>
+      _subtitleStateController.stream;
 
   /// 获取连接状态流
   Stream<RtcConnectionState> get connectionStateStream =>

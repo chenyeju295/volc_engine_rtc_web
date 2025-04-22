@@ -53,7 +53,7 @@ class RtcMessageHandler {
       _messageHistoryController.stream;
 
   /// 回调属性
-  void Function(Map<String, dynamic>)? onSubtitle;
+  void Function(SubtitleEntity)? onSubtitle;
   void Function(Map<String, dynamic>)? onFunctionCall;
   void Function(Map<String, dynamic>)? onState;
 
@@ -104,6 +104,10 @@ class RtcMessageHandler {
           var subtitleData = parsedTlvMessage['data'];
           if (subtitleData is List && subtitleData.isNotEmpty) {
             var firstItem = subtitleData.first;
+            // 如果设置了回调，也发送到回调
+            if (onSubtitle != null) {
+              onSubtitle!(SubtitleEntity.fromJson(firstItem));
+            }
             if (firstItem is Map && firstItem.containsKey('definite')) {
               isDefiniteSubtitle = firstItem['definite'] == true &&
                   firstItem['paragraph'] == true;
@@ -112,9 +116,7 @@ class RtcMessageHandler {
         }
 
         parsedData = parsedTlvMessage;
-      }
-      // 2. 如果TLV解析失败，尝试直接作为字符串处理
-      else {
+      } else {
         // 通过预检查判断是否可能是已知格式
         final bool mightBeJson = magicString == "{\"st" ||
             magicString == "conv" ||
@@ -202,6 +204,11 @@ class RtcMessageHandler {
 
   /// 处理文本或JSON消息
   void processTextOrJson(Map<String, dynamic> data) {
+    _processTextOrJson(data);
+  }
+
+  /// 内部方法 - 处理文本或JSON消息
+  void _processTextOrJson(Map<String, dynamic> data) {
     try {
       final type = data['type']?.toString().toLowerCase();
 
@@ -298,6 +305,10 @@ class RtcMessageHandler {
             }
           }
         }
+        // 如果设置了回调，也发送到回调
+        if (onSubtitle != null) {
+          onSubtitle!(SubtitleEntity.fromJson(subtitleData));
+        }
       }
 
       // 只有最终字幕才输出日志，简化输出内容
@@ -325,7 +336,7 @@ class RtcMessageHandler {
 
         // 如果设置了回调，也发送到回调
         if (onSubtitle != null) {
-          onSubtitle!(subtitle);
+          onSubtitle!(SubtitleEntity.fromJson(subtitle));
         }
 
         // 添加到消息历史
@@ -407,6 +418,12 @@ class RtcMessageHandler {
   void _addMessage(RtcAigcMessage message) {
     _messageHistory.add(message);
     _messageHistoryController.add(_messageHistory);
+  }
+
+  /// 公共方法 - 允许直接添加消息到历史记录
+  void addMessage(RtcAigcMessage message) {
+    _addMessage(message);
+    debugPrint('【消息处理器】直接添加消息到历史记录: ${message.text} (${message.type})');
   }
 
   /// 发送用户二进制消息

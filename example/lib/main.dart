@@ -161,56 +161,28 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   void _setupSubscriptions() {
     // 订阅字幕流
     _subtitleSubscription = RtcAigcPlugin.subtitleStream.listen((subtitle) {
-      // 调试输出字幕数据类型和内容
-      debugPrint('收到字幕数据: 类型=${subtitle.runtimeType}, 内容=$subtitle');
+      if (subtitle.definite == true) {
+        debugPrint('收到最终字幕数据: 类型=${subtitle.runtimeType}, 内容=$subtitle');
+      }
 
-      String text = '';
-      bool isFinal = false;
-
-      // 处理不同类型的字幕数据
-      // 如果是Map类型，直接提取字段
-      text = subtitle['text'] ?? '';
-      isFinal = subtitle['isFinal'] ?? false;
-
-      // 调试输出处理后的字幕
-      debugPrint('处理后的字幕: text="$text", isFinal=$isFinal');
-
-      if (text.isNotEmpty) {
+      SubtitleEntity sub = subtitle; // 调试输出处理后的字幕
+      if (sub.text != null) {
+        // 确定字幕来源 - userId与_aiUserId匹配为AI，与当前用户ID匹配为用户自己
+        final bool isFromAi = _aiUserId != null && _aiUserId == sub.userId;
+        final bool isFromUser = 'user1' == sub.userId; // 根据实际用户ID调整
+        
+        debugPrint('字幕来源: userId=${sub.userId}, isAi=$isFromAi, isUser=$isFromUser');
+        
         setState(() {
-          _currentSubtitle = text;
-          _isSubtitleFinal = isFinal;
-          _handleSubtitleInChatList(text, isFinal);
+          _currentSubtitle = sub.text!;
+          _isSubtitleFinal = sub.definite == true;
+
+          _handleSubtitleInChatList(
+              _currentSubtitle, _isSubtitleFinal, isFromUser);
         });
       }
     }, onError: (error) {
       debugPrint('字幕流错误: $error');
-    });
-
-    // 订阅状态流以获取更详细的字幕信息
-    _stateSubscription = RtcAigcPlugin.stateStream.listen((state) {
-      // 检查是否为字幕状态消息
-      debugPrint('状态流变化: $state');
-      setState(() {
-        _status = state.toString();
-      });
-    });
-
-    // 订阅音频状态流
-    _audioStatusSubscription =
-        RtcAigcPlugin.audioStatusStream.listen((isActive) {
-      setState(() {
-        _isSpeaking = isActive;
-        debugPrint('音频状态变化: 是否说话=$isActive');
-      });
-    });
-
-    // 订阅消息流
-    _messageSubscription = RtcAigcPlugin.messageHistoryStream.listen((message) {
-      final List<RtcAigcMessage> messageMap = message;
-      setState(() {
-        _messages.addAll(messageMap);
-      });
-      _scrollToBottom();
     });
 
     // 用户加入事件
@@ -259,9 +231,20 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   }
 
   // 处理字幕在聊天列表中的显示
-  void _handleSubtitleInChatList(String text, bool isFinal) {
+  void _handleSubtitleInChatList(String text, bool isFinal, bool isUser) {
     if (text.isEmpty) return;
 
+    // 如果是用户字幕，以不同方式处理
+    if (isUser) {
+      // 用户的字幕通常应该是说话的转录，可以直接作为一条新消息添加
+      if (isFinal) { // 只处理最终字幕，避免过多中间状态
+        _addUserMessage(text);
+        debugPrint('添加用户字幕作为新消息: $text');
+      }
+      return;
+    }
+
+    // 以下处理AI字幕
     // 如果是最终字幕且没有临时字幕，直接添加为新消息
     if (isFinal && !_hasPendingSubtitle) {
       _addAiMessage(text, isFinal: true);
@@ -301,16 +284,36 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     _scrollToBottom();
   }
 
+  // 添加用户消息到聊天列表
+  void _addUserMessage(String text) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+
+    setState(() {
+      _messages.add(RtcAigcMessage.text(
+        text: text,
+        isUser: true,
+        id: id,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        isFinal: true,
+      ));
+    });
+    _scrollToBottom();
+  }
+
   // 添加AI消息到聊天列表
   void _addAiMessage(String text, {bool isFinal = true, String? messageId}) {
     final id = messageId ?? DateTime.now().millisecondsSinceEpoch.toString();
 
     setState(() {
-      _messages.add(RtcAigcMessage.text(
+      final message = RtcAigcMessage.text(
         text: text,
         isUser: false,
         id: id,
-      ));
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        isFinal: isFinal,
+      );
+
+      _messages.add(message);
 
       // 如果不是最终字幕，将ID添加到临时字幕集合
       if (!isFinal) {
@@ -326,10 +329,13 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     setState(() {
       for (int i = 0; i < _messages.length; i++) {
         if (_messages[i].id == messageId) {
+          final oldMessage = _messages[i];
           _messages[i] = RtcAigcMessage.text(
             text: text,
             isUser: false,
             id: messageId,
+            timestamp: oldMessage.timestamp,
+            isFinal: isFinal,
           );
 
           // 如果是最终字幕，从临时字幕集合中移除
@@ -598,35 +604,76 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
               margin: const EdgeInsets.all(8.0),
               padding: const EdgeInsets.all(12.0),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: _isSubtitleFinal
+                    ? Colors.green.shade50
+                    : Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _isSpeaking ? Icons.mic : Icons.speaker_notes,
-                    color: _isSpeaking ? Colors.green : Colors.blue,
-                    size: 16,
+                border: Border.all(
+                  color: _isSubtitleFinal
+                      ? Colors.green.shade200
+                      : Colors.blue.shade200,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(_currentSubtitle)),
-                  if (!_isSubtitleFinal)
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.0,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isSpeaking ? Icons.mic : Icons.speaker_notes,
+                        color: _isSpeaking ? Colors.green : Colors.blue,
+                        size: 16,
                       ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isSubtitleFinal ? "最终字幕" : "实时字幕",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _isSubtitleFinal
+                              ? Colors.green.shade700
+                              : Colors.blue.shade700,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (!_isSubtitleFinal)
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.0,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                _isSubtitleFinal ? Colors.green : Colors.blue),
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      if (_isSpeaking)
+                        IconButton(
+                          icon: const Icon(Icons.stop_circle,
+                              color: Colors.red, size: 20),
+                          onPressed: _interruptConversation,
+                          tooltip: '打断',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _currentSubtitle,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontStyle: _isSubtitleFinal
+                          ? FontStyle.normal
+                          : FontStyle.italic,
                     ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.stop_circle, color: Colors.red),
-                    onPressed: _interruptConversation,
-                    tooltip: '打断',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
@@ -756,6 +803,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
     }
 
+    // 获取角色标识
+    final String roleName = isUser ? '我' : 'AI助手';
+    final Color roleColor = isUser ? Colors.blue.shade700 : Colors.green.shade700;
+    final IconData roleIcon = isUser ? Icons.person : Icons.smart_toy;
+
     // 用户或AI消息样式
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4.0),
@@ -791,17 +843,16 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isUser ? Icons.person : Icons.smart_toy,
+                  roleIcon,
                   size: 16,
                   color: isUser ? Colors.blue : Colors.green,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isUser ? '我' : 'AI助手',
+                  roleName,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color:
-                        isUser ? Colors.blue.shade700 : Colors.green.shade700,
+                    color: roleColor,
                   ),
                 ),
                 if (!isUser) ...[
