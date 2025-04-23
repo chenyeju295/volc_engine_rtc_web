@@ -98,8 +98,6 @@ class RtcEventManager {
   // Stream controllers for media events
   final StreamController<SubtitleEntity> _subtitleController =
       StreamController<SubtitleEntity>.broadcast();
-  final StreamController<Map<String, dynamic>> _subtitleStateController =
-      StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _networkQualityController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _functionCallController =
@@ -752,28 +750,6 @@ class RtcEventManager {
     }
   }
 
-  void _handleSubtitleStateChanged(dynamic event) {
-    debugPrint('事件: onSubtitleStateChanged');
-    try {
-      final state = js_util.getProperty(event, 'state') ?? '';
-      final errorCode = js_util.getProperty(event, 'errorCode') ?? 0;
-      final errorMessage = js_util.getProperty(event, 'errorMessage') ?? '';
-
-      final stateData = {
-        'type': 'subtitle_state_changed',
-        'state': state,
-        'errorCode': errorCode,
-        'errorMessage': errorMessage,
-        'timestamp': DateTime.now().millisecondsSinceEpoch
-      };
-
-      _subtitleStateController.add(stateData);
-      _stateController.add(stateData);
-    } catch (e) {
-      debugPrint('处理onSubtitleStateChanged事件出错: $e');
-    }
-  }
-
   void _handleLocalAudioPropertiesReport(dynamic event) {
     try {
       if (event == null) return;
@@ -941,7 +917,6 @@ class RtcEventManager {
     _userPublishStreamController.close();
     _userUnpublishStreamController.close();
     _subtitleController.close();
-    _subtitleStateController.close();
     _networkQualityController.close();
     _functionCallController.close();
     _autoPlayFailedController.close();

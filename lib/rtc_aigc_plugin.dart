@@ -180,11 +180,6 @@ class RtcAigcPlugin {
   static Stream<SubtitleEntity> get subtitleStream =>
       _rtcService?.subtitleStream ?? const Stream<SubtitleEntity>.empty();
 
-  /// 用于监听字幕状态变化的流
-  static Stream<Map<String, dynamic>> get subtitleStateStream =>
-      _rtcService?.subtitleStateStream ??
-      const Stream<Map<String, dynamic>>.empty();
-
   /// 用于监听消息历史变化的流
   static Stream<List<RtcAigcMessage>> get messageHistoryStream =>
       _rtcService?.messageHistoryStream ??

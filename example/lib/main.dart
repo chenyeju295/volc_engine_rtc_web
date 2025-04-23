@@ -59,7 +59,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   StreamSubscription? _stateSubscription;
   StreamSubscription? _userJoinedSubscription;
   StreamSubscription? _userLeaveSubscription;
-
+  final String userID = 'user1';
   @override
   void initState() {
     super.initState();
@@ -92,11 +92,11 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       final aigcConfig = AigcConfig(
         appId: "67b5aec82b4ee7020146d3b5",
         roomId: "room1",
-        taskId: "user1",
+        taskId: userID,
         agentConfig: AgentConfig(
           userId: 'ChatBot01',
           welcomeMessage: '你好，我是火山引擎 RTC 语音助手，有什么需要帮忙的吗？',
-          targetUserId: ['user1'],
+          targetUserId: [userID],
         ),
         config: Config(
           lLMConfig: LlmConfig(
@@ -165,14 +165,10 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         debugPrint('收到最终字幕数据: 类型=${subtitle.runtimeType}, 内容=$subtitle');
       }
 
-      SubtitleEntity sub = subtitle; // 调试输出处理后的字幕
+      SubtitleEntity sub = subtitle;  
       if (sub.text != null) {
-        // 确定字幕来源 - userId与_aiUserId匹配为AI，与当前用户ID匹配为用户自己
-        final bool isFromAi = _aiUserId != null && _aiUserId == sub.userId;
-        final bool isFromUser = 'user1' == sub.userId; // 根据实际用户ID调整
-        
-        debugPrint('字幕来源: userId=${sub.userId}, isAi=$isFromAi, isUser=$isFromUser');
-        
+        final bool isFromUser = userID == sub.userId;  
+
         setState(() {
           _currentSubtitle = sub.text!;
           _isSubtitleFinal = sub.definite == true;
@@ -185,15 +181,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       debugPrint('字幕流错误: $error');
     });
 
-    // 用户加入事件
-    _userJoinedSubscription = RtcAigcPlugin.userJoinedStream.listen((data) {
-      _handleUserJoined(data);
-    });
-
-    // 用户离开事件
-    _userLeaveSubscription = RtcAigcPlugin.userLeaveStream.listen((data) {
-      _handleUserLeave(data);
-    });
+    
   }
 
   void _scrollToBottom() {
@@ -207,37 +195,16 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       }
     });
   }
-
-  // 处理用户加入事件
-  void _handleUserJoined(Map<String, dynamic> data) {
-    final userId = data['userId'];
-    if (userId != null && userId != 'user1') {
-      setState(() {
-        _aiUserId = userId;
-        _addSystemMessage('AI助手已加入房间');
-      });
-    }
-  }
-
-  // 处理用户离开事件
-  void _handleUserLeave(Map<String, dynamic> data) {
-    final userId = data['userId'];
-    if (userId != null && userId == _aiUserId) {
-      setState(() {
-        _aiUserId = null;
-        _addSystemMessage('AI助手已离开房间');
-      });
-    }
-  }
-
-  // 处理字幕在聊天列表中的显示
+ 
+  
   void _handleSubtitleInChatList(String text, bool isFinal, bool isUser) {
     if (text.isEmpty) return;
 
     // 如果是用户字幕，以不同方式处理
     if (isUser) {
       // 用户的字幕通常应该是说话的转录，可以直接作为一条新消息添加
-      if (isFinal) { // 只处理最终字幕，避免过多中间状态
+      if (isFinal) {
+        // 只处理最终字幕，避免过多中间状态
         _addUserMessage(text);
         debugPrint('添加用户字幕作为新消息: $text');
       }
@@ -805,7 +772,8 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
     // 获取角色标识
     final String roleName = isUser ? '我' : 'AI助手';
-    final Color roleColor = isUser ? Colors.blue.shade700 : Colors.green.shade700;
+    final Color roleColor =
+        isUser ? Colors.blue.shade700 : Colors.green.shade700;
     final IconData roleIcon = isUser ? Icons.person : Icons.smart_toy;
 
     // 用户或AI消息样式
