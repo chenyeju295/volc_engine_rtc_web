@@ -1,20 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
-import 'package:volc_engine_rtc_web/src/config/aigc_config.dart';
-import 'dart:js' as js;
 import 'dart:js_util' as js_util;
-import 'dart:js_interop';
 
-import 'package:volc_engine_rtc_web/src/models/models.dart';
 import 'package:volc_engine_rtc_web/src/services/rtc_engine_manager.dart';
 import 'package:volc_engine_rtc_web/src/services/rtc_device_manager.dart';
-import 'package:volc_engine_rtc_web/src/client/aigc_client.dart';
 import 'package:volc_engine_rtc_web/src/services/rtc_event_manager.dart';
 import 'package:volc_engine_rtc_web/src/services/rtc_message_handler.dart';
-import 'package:volc_engine_rtc_web/src/utils/web_utils.dart';
 
 import '../utils/token_generator.dart';
 
@@ -1322,10 +1315,8 @@ class RtcService {
       _userStartAudioCaptureController.close();
       _userStopAudioCaptureController.close();
       // 销毁引擎
-      if (_engineManager != null) {
-        _engineManager.dispose();
-        _aigcClient = null;
-      }
+      _engineManager.dispose();
+      _aigcClient = null;
       _isDisposed = true;
     } catch (e) {
       debugPrint('【RTC服务】销毁时发生错误: $e');

@@ -6,7 +6,6 @@ import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
 
 import 'package:volc_engine_rtc_web/src/services/rtc_message_handler.dart';
-import 'package:volc_engine_rtc_web/src/utils/web_utils.dart';
 
 import '../../volc_engine_rtc_web.dart';
 

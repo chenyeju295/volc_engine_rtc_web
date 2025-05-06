@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:js_util' as js_util;
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 /// Message type constants matching web implementation
@@ -63,8 +62,6 @@ class RtcMessageUtils {
       }
 
       // 记录前几个字节用于调试
-      final magicBytes = [bytes[0], bytes[1], bytes[2], bytes[3]];
-      final magicString = String.fromCharCodes(magicBytes);
 
       // 检查魔术数字
       final int magic =
@@ -284,10 +281,8 @@ class RtcMessageUtils {
               if (result is Map<String, dynamic>) {
                 debugPrint('RtcMessageUtils: 成功提取并解析了JSON部分');
                 // 将消息类型添加到返回的Map中
-                if (result is Map<String, dynamic>) {
-                  result['type'] = 'conv';
-                  return result;
-                }
+                result['type'] = 'conv';
+                return result;
               }
             } catch (e) {
               // 继续使用原始解析逻辑

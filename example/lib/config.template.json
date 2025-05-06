@@ -1,0 +1,14 @@
+{
+  "appId": "YOUR_APP_ID",
+  "baseUrl": "YOUR_BASE_URL",
+  "appKey": "YOUR_APP_KEY",
+  "llm": {
+    "endPointId": "YOUR_ENDPOINT_ID"
+  },
+  "tts": {
+    "appid": "YOUR_TTS_APP_ID"
+  },
+  "asr": {
+    "appId": "YOUR_ASR_APP_ID"
+  }
+} 

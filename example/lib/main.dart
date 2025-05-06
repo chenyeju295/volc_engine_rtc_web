@@ -38,18 +38,18 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   bool _isInitialized = false;
   bool _isJoined = false;
   bool _isConversationActive = false;
-  bool _isSpeaking = false;
+  final bool _isSpeaking = false;
   bool _isMuted = false;
   String _currentSubtitle = '';
   bool _isSubtitleFinal = false;
-  List<RtcAigcMessage> _messages = [];
+  final List<RtcAigcMessage> _messages = [];
 
   // Load configuration
   Map<String, dynamic>? _config;
 
   bool _hasPendingSubtitle = false;
   String? _currentAiMessageId;
-  Set<String> _pendingSubtitleIds = {};
+  final Set<String> _pendingSubtitleIds = {};
 
   // Controllers
   final TextEditingController _messageController = TextEditingController();
@@ -452,7 +452,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
     if (message.isEmpty) return;
 
     try {
-      await RtcAigcPlugin.sendTextMessage(message);
+      await RtcAigcPlugin.sendMessage(message);
       _messageController.clear();
     } catch (e) {
       setState(() {

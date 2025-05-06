@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
 import 'dart:js_util' as js_util;
-import 'dart:js_interop';
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -992,9 +990,7 @@ class WebUtils {
         // 可以在调试模式下输出设备详情
         if (kDebugMode && length > 0) {
           for (int i = 0; i < length; i++) {
-            final device = js_util.getProperty(devices, i);
-            final kind = js_util.getProperty(device, 'kind') ?? 'unknown';
-            final label = js_util.getProperty(device, 'label') ?? '(无标签)';
+            js_util.getProperty(devices, i);
           }
         }
       }

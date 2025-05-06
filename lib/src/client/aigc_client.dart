@@ -5,10 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
 
-import 'package:volc_engine_rtc_web/src/models/models.dart';
-
-import '../config/aigc_config.dart';
-
 /// API 操作类型
 enum ActionType {
   /// 开始语音对话

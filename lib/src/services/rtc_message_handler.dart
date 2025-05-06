@@ -1,23 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:js' as js;
-import 'dart:js_util' as js_util;
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
-import 'package:volc_engine_rtc_web/src/utils/web_utils.dart';
-import 'package:volc_engine_rtc_web/src/utils/rtc_message_utils.dart';
-import 'package:volc_engine_rtc_web/src/models/models.dart';
-
-import '../../volc_engine_rtc_web.dart';
+import '../utils/web_utils.dart';
+import '../utils/rtc_message_utils.dart';
+import '../models/models.dart';
 
 /// RTC消息处理器 - 专门处理RTC二进制消息、字幕和函数调用
 class RtcMessageHandler {
   /// RTC引擎实例
   dynamic _rtcClient;
-
-  /// 是否已初始化
-  bool _isInitialized = false;
 
   /// 字幕流控制器
   final StreamController<Map<String, dynamic>> _subtitleController =
@@ -59,7 +50,6 @@ class RtcMessageHandler {
 
   /// 构造函数
   RtcMessageHandler() {
-    _isInitialized = true;
     debugPrint('RtcMessageHandler: 初始化完成');
   }
 
@@ -99,7 +89,6 @@ class RtcMessageHandler {
       final parsedTlvMessage = RtcMessageUtils.parseTlvMessage(bytes);
       if (parsedTlvMessage != null) {
         // 只为非字幕消息或最终字幕输出解析成功日志
-        bool isDefiniteSubtitle = false;
         if (isSubtitle && parsedTlvMessage.containsKey('data')) {
           var subtitleData = parsedTlvMessage['data'];
           if (subtitleData is List && subtitleData.isNotEmpty) {
@@ -108,10 +97,7 @@ class RtcMessageHandler {
             if (onSubtitle != null) {
               onSubtitle!(SubtitleEntity.fromJson(firstItem));
             }
-            if (firstItem is Map && firstItem.containsKey('definite')) {
-              isDefiniteSubtitle = firstItem['definite'] == true &&
-                  firstItem['paragraph'] == true;
-            }
+            if (firstItem is Map && firstItem.containsKey('definite')) {}
           }
         }
 
@@ -553,7 +539,6 @@ class RtcMessageHandler {
     _stateController.close();
     _functionCallController.close();
     _messageHistoryController.close();
-    _isInitialized = false;
     debugPrint('RtcMessageHandler: 资源已释放');
   }
 }

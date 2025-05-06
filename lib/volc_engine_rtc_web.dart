@@ -25,17 +25,17 @@ export 'src/services/rtc_service.dart';
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
-import 'package:volc_engine_rtc_web/src/config/aigc_config.dart';
-import 'package:volc_engine_rtc_web/src/models/models.dart';
-import 'package:volc_engine_rtc_web/src/services/rtc_device_manager.dart';
-import 'package:volc_engine_rtc_web/src/services/rtc_engine_manager.dart';
-import 'package:volc_engine_rtc_web/src/services/rtc_event_manager.dart';
-import 'package:volc_engine_rtc_web/src/services/rtc_message_handler.dart';
+import 'src/config/aigc_config.dart';
+import 'src/models/models.dart';
+import 'src/services/rtc_device_manager.dart';
+import 'src/services/rtc_engine_manager.dart';
+import 'src/services/rtc_event_manager.dart';
+import 'src/services/rtc_message_handler.dart';
+import 'src/services/rtc_service.dart';
+import 'src/utils/web_utils.dart';
 
 class RtcAigcPlugin {
   static const MethodChannel _channel = MethodChannel('volc_engine_rtc_web');
@@ -353,12 +353,6 @@ class RtcAigcPlugin {
       debugPrint('Error sending message: $e');
       return false;
     }
-  }
-
-  /// 发送文本消息给AI (兼容旧版本API)
-  @Deprecated('Use sendMessage() instead')
-  static Future<bool> sendTextMessage(String message) async {
-    return sendMessage(message);
   }
 
   /// Interrupt the current AI response

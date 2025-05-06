@@ -3,11 +3,6 @@ import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
 import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
 
-import 'package:volc_engine_rtc_web/src/utils/web_utils.dart';
-import 'package:volc_engine_rtc_web/src/client/aigc_client.dart';
-
-import '../config/aigc_config.dart';
-
 /// Manages the RTC and AIGC engine initialization and core functionality
 class RtcEngineManager {
   final AigcConfig config;

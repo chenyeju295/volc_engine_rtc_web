@@ -454,9 +454,7 @@ class RtcAigcMessage {
       'timestamp': timestamp,
     };
 
-    if (text != null) {
-      json['text'] = text;
-    }
+    json['text'] = text;
 
     if (senderId != null) {
       json['senderId'] = senderId;
@@ -477,9 +475,7 @@ class RtcAigcMessage {
       json['status'] = status;
     }
 
-    if (isFinal) {
-      json['isFinal'] = isFinal;
-    }
+    json['isFinal'] = isFinal;
 
     return json;
   }

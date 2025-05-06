@@ -1,8 +1,9 @@
 name: volc_engine_rtc_web
-description: A Flutter plugin for RTC AIGC API integration.
-version: 0.0.1
-homepage:
-
+description: A Flutter plugin for Volc Engine RTC with AIGC, enabling interactive real-time voice conversations with AI assistants in Flutter web apps.
+version: 0.1.0
+repository: https://github.com/chenyeju295/volc_engine_rtc_web
+homepage: https://github.com/chenyeju295/volc_engine_rtc_web
+ 
 environment:
   sdk: '>=3.0.0 <4.0.0'
   flutter: ">=3.0.0"
