@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
 
 void main() {
@@ -42,6 +44,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   bool _isSubtitleFinal = false;
   List<RtcAigcMessage> _messages = [];
 
+  // Load configuration
+  Map<String, dynamic>? _config;
+
   bool _hasPendingSubtitle = false;
   String? _currentAiMessageId;
   Set<String> _pendingSubtitleIds = {};
@@ -58,10 +63,28 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   StreamSubscription? _userJoinedSubscription;
   StreamSubscription? _userLeaveSubscription;
   final String userID = 'user1';
+
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _loadConfig().then((_) => _initialize());
+  }
+
+  // Load configuration from config.json file
+  Future<void> _loadConfig() async {
+    try {
+      final String configString =
+          await rootBundle.loadString('lib/config.json');
+      setState(() {
+        _config = json.decode(configString);
+      });
+      debugPrint('Configuration loaded successfully');
+    } catch (e) {
+      debugPrint('Error loading configuration: $e');
+      setState(() {
+        _status = '配置加载失败: $e';
+      });
+    }
   }
 
   @override
@@ -80,6 +103,13 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
   }
 
   Future<void> _initialize() async {
+    if (_config == null) {
+      setState(() {
+        _status = '错误: 配置未加载';
+      });
+      return;
+    }
+
     WidgetsFlutterBinding.ensureInitialized();
 
     setState(() {
@@ -88,8 +118,8 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
 
     try {
       final aigcConfig = AigcConfig(
-        appId: " ",
-        roomId: "room1",
+        appId: _config!['appId'],
+        roomId: 'room1',
         taskId: userID,
         agentConfig: AgentConfig(
           userId: 'ChatBot01',
@@ -99,12 +129,12 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
         config: Config(
           lLMConfig: LlmConfig(
             mode: 'ArkV3',
-            endPointId: ' ',
+            endPointId: _config!['llm']['endPointId'],
           ),
           tTSConfig: TtsConfig(
             provider: 'volcano',
             providerParams: ProviderParams(
-              app: App(appid: ' ', cluster: 'volcano_tts'),
+              app: App(appid: _config!['tts']['appid'], cluster: 'volcano_tts'),
               audio: Audio(voiceType: 'BV001_streaming'),
             ),
           ),
@@ -112,7 +142,7 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
             provider: 'volcano',
             providerParams: AsrProviderParams(
               mode: 'smallmodel',
-              appId: ' ',
+              appId: _config!['asr']['appId'],
               cluster: 'volcengine_streaming_common',
             ),
           ),
@@ -120,9 +150,9 @@ class _RtcAigcDemoState extends State<RtcAigcDemo> {
       );
 
       final success = await RtcAigcPlugin.initialize(
-        baseUrl: " ",
+        baseUrl: _config!['baseUrl'],
         config: aigcConfig,
-        appKey: ' ',
+        appKey: _config!['appKey'],
       );
 
       if (success) {
