@@ -1,73 +1,64 @@
-# Volc Engine RTC Web Plugin for Flutter
+ 
 
-A Flutter plugin for integrating Volc Engine RTC with AIGC capabilities, enabling interactive real-time voice conversations with AI assistants in Flutter Web applications.
+# 火山引擎 RTC Web Flutter 插件
+
+一个用于集成火山引擎实时音视频（RTC）与 AIGC 能力的 Flutter 插件，可在 Flutter Web 应用中实现与 AI 助手的实时语音对话。
 
 [![pub package](https://img.shields.io/pub/v/volc_engine_rtc_web.svg)](https://pub.dev/packages/volc_engine_rtc_web)
 
-## Features
+### 官方 web demo : https://github.com/volcengine/rtc-aigc-demo/tree/main
 
-- Real-time voice recognition (ASR)
-- AI conversation using large language models (LLM)
-- Text-to-speech synthesis (TTS)
-- Two-way conversation capabilities
-- Integration with Volcano Engine RTC SDK
+#### SDK 版本：4.66.1
+ cdn:  https://lf-unpkg.volccdn.com/obj/vcloudfe/sdk/@volcengine/rtc/4.66.1/1741254642340/volengine_Web_4.66.1.js
 
-## Installation
+## 功能特点
 
-Add the package to your pubspec.yaml:
+- 实时语音识别 (ASR)
+- 基于大型语言模型的 AI 对话能力 (LLM)
+- 文本转语音合成 (TTS)
+- 双向对话功能
+- 与火山引擎 RTC SDK 集成
+
+## 安装方法
+
+在 pubspec.yaml 中添加依赖：
 
 ```yaml
 dependencies:
   volc_engine_rtc_web: ^0.1.0
 ```
 
-## Configuration
+## 配置说明
 
-This plugin requires configuration for RTC, ASR, TTS, and LLM services. For security purposes, sensitive configuration values should be stored in a separate config.json file that is not committed to your repository.
+本插件需要为 RTC、ASR、TTS 和 LLM 服务配置相关参数。为了安全起见，敏感配置信息应存储在单独的 config.json 文件中，并且不应提交到代码仓库。
 
-### Setting up config.json
+### 配置 config.json
 
-1. Create a `config.json` file in your project's `lib` directory:
+1. 在项目的 `lib` 目录中创建 `config.json` 文件 或者直接写入配置：
 
 ```json
 {
-  "appId": "YOUR_APP_ID",
-  "baseUrl": "YOUR_BASE_URL",
-  "appKey": "YOUR_APP_KEY",
+  "appId": "您的应用ID",
+  "baseUrl": "您的基础URL",
+  "appKey": "您的应用密钥",
   "llm": {
-    "endPointId": "YOUR_ENDPOINT_ID"
+    "endPointId": "您的LLM终端点ID"
   },
   "tts": {
-    "appid": "YOUR_TTS_APP_ID"
+    "appid": "您的TTS应用ID"
   },
   "asr": {
-    "appId": "YOUR_ASR_APP_ID"
+    "appId": "您的ASR应用ID"
   }
 }
 ```
 
-2. Add this file to your `.gitignore` to prevent it from being committed:
 
-```
-# Configuration files containing sensitive information
-lib/config.json
-```
+## 基本用法
 
-3. Add the file to your assets in `pubspec.yaml`:
+### 初始化插件
 
-```yaml
-flutter:
-  assets:
-    - lib/config.json
-```
-
-4. Create a `config.template.json` file with placeholder values as a reference for other developers.
-
-## Basic Usage
-
-### Initialize the Plugin
-
-Load the configuration from the config.json file and initialize the plugin:
+从 config.json 文件加载配置并初始化插件：
 
 ```dart
 import 'dart:convert';
@@ -76,19 +67,19 @@ import 'package:volc_engine_rtc_web/volc_engine_rtc_web.dart';
 
 Future<void> initializeRtcAigc() async {
   try {
-    // Load configuration from JSON file
+    // 从JSON文件加载配置
     final String configString = await rootBundle.loadString('lib/config.json');
     final config = json.decode(configString);
-    
-    // Set up the AIGC configuration
+    final String userId = 'user1';// 可以动态生成或从配置中获取
+    // 设置AIGC配置
     final aigcConfig = AigcConfig(
       appId: config['appId'],
-      roomId: 'room1',  // Can be dynamically generated or from config
-      taskId: 'user1',  // Should be user-specific
+      roomId: 'room1',  // 可以动态生成或从配置中获取
+      taskId: userId,  
       agentConfig: AgentConfig(
         userId: 'ChatBot01',
-        welcomeMessage: 'Hello, how can I help you today?',
-        targetUserId: ['user1'],
+        welcomeMessage: '您好，我是AI助手，有什么可以帮助您的？',
+        targetUserId: [userId],
       ),
       config: Config(
         lLMConfig: LlmConfig(
@@ -118,103 +109,98 @@ Future<void> initializeRtcAigc() async {
       ),
     );
 
-    // Initialize the plugin
+    // 初始化插件
     final success = await RtcAigcPlugin.initialize(
-      baseUrl: config['baseUrl'],
+      baseUrl: config['baseUrl'], // 服务端部署地址
       config: aigcConfig,
-      appKey: config['appKey'],
+      appKey: config['appKey'], //  用于生成进房间 token
     );
     
     if (success) {
-      print('RTC AIGC Plugin initialized successfully');
+      print('RTC AIGC 插件初始化成功');
     } else {
-      print('Failed to initialize RTC AIGC Plugin');
+      print('RTC AIGC 插件初始化失败');
     }
   } catch (e) {
-    print('Error initializing RTC AIGC Plugin: $e');
+    print('初始化 RTC AIGC 插件出错: $e');
   }
 }
 ```
 
-### Join a Room
+### 加入房间
 
 ```dart
 final success = await RtcAigcPlugin.joinRoom();
 if (success) {
-  print('Joined room successfully');
+  print('成功加入房间');
 } else {
-  print('Failed to join room');
+  print('加入房间失败');
 }
 ```
 
-### Start a Conversation
+### 开始对话
 
 ```dart
 final success = await RtcAigcPlugin.startConversation();
 if (success) {
-  print('Conversation started successfully');
+  print('成功开始对话');
 } else {
-  print('Failed to start conversation');
+  print('开始对话失败');
 }
 ```
+ 
 
-### Send a Text Message
-
-```dart
-await RtcAigcPlugin.sendTextMessage('Hello AI assistant');
-```
-
-### Listening to Subtitles
+### 监听字幕
 
 ```dart
 RtcAigcPlugin.subtitleStream.listen((subtitle) {
-  print('Subtitle: ${subtitle.text}, Final: ${subtitle.definite}');
+  print('字幕: ${subtitle.text}, 是否最终字幕: ${subtitle.definite}');
 }, onError: (error) {
-  print('Subtitle stream error: $error');
+  print('字幕流错误: $error');
 });
 ```
 
-### Managing Microphone
+### 管理麦克风
 
 ```dart
-// Check for device permissions
+// 检查设备权限
 final permissionResult = await RtcAigcPlugin.enableDevices(audio: true);
 if (permissionResult['audio'] == true) {
-  print('Microphone access granted');
+  print('麦克风访问权限已获取');
 } else {
-  print('Microphone access denied');
+  print('麦克风访问权限被拒绝');
 }
 
-// Mute/unmute
-final muteResult = await RtcAigcPlugin.muteAudio(true); // Mute
-final unmuteResult = await RtcAigcPlugin.muteAudio(false); // Unmute
+// 静音/取消静音
+final muteResult = await RtcAigcPlugin.muteAudio(true); // 静音
+final unmuteResult = await RtcAigcPlugin.muteAudio(false); // 取消静音
 ```
 
-### End Session
+### 结束会话
 
 ```dart
-// Stop conversation
+// 停止对话
 await RtcAigcPlugin.stopConversation();
 
-// Leave room
+// 离开房间
 await RtcAigcPlugin.leaveRoom();
 
-// Clean up resources
+// 清理资源
 RtcAigcPlugin.dispose();
 ```
 
-## Example App
+## 示例应用
 
-See the [example](./example) directory for a complete Flutter app that demonstrates all features.
+查看 [example](./example) 目录获取展示所有功能的完整 Flutter 应用。
 
-## API Reference
+## API 参考
 
-For a complete list of available methods and classes, see the [API documentation](https://pub.dev/documentation/volc_engine_rtc_web/latest/).
+有关可用方法和类的完整列表，请参阅 [API 文档](https://pub.dev/documentation/volc_engine_rtc_web/latest/)。
 
-## License
+## 许可证
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+本项目基于 MIT 许可证 - 详情请参阅 LICENSE 文件。
 
-## Contributing
+## 贡献指南
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+欢迎贡献！请随时提交 Pull Request。 
